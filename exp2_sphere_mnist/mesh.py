@@ -9,6 +9,7 @@ class icosphere(object):
     def __init__(self, level=0):
         self.level = level
         self.vertices, self.faces = self.icosahedron()
+        self.nv_prev = self.vertices.shape[0]
         for l in range(self.level):
             self.nv_prev = self.vertices.shape[0]
             self.subdivide()

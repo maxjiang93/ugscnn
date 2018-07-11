@@ -2,6 +2,7 @@ from mesh import icosphere
 import pyigl as igl
 from iglhelpers import *
 import pickle
+import gzip
 from scipy.io import loadmat
 
 
@@ -55,10 +56,46 @@ def test2(field_name):
     viewer.data().set_colors(C)
     viewer.data().show_lines = False
     bc = viewer.core.background_color
-    bc.setConstant(.5)
+    # bc.setConstant(0)
     viewer.core.background_color = bc
     viewer.launch()
 
+def test3(path):
+    d = pickle.load(gzip.open(path, "rb"))
+    sp = icosphere(3)
+    V = p2e(sp.vertices)
+    F = p2e(sp.faces)
+    i = np.random.choice(len(d['train_inputs']))
+    data = p2e(d['train_inputs'][i])
+    print(d['train_labels'][i])
+    C = igl.eigen.MatrixXd()
+    igl.colormap(igl.COLOR_MAP_TYPE_VIRIDIS, data, True, C)
+
+    viewer = igl.glfw.Viewer()
+    viewer.data().clear()
+    viewer.data().set_mesh(V, F)
+    viewer.data().set_colors(C)
+    viewer.launch()
+
+def test4():
+    d = np.load("/Users/ChiyuMaxJiang/Downloads/debug_out.npy")
+    print(d.shape)
+    print(max(d[0, 0]), min(d[0, 0]))
+    print(np.mean(d), np.std(d))
+    sp = icosphere(3)
+    V = p2e(sp.vertices)
+    F = p2e(sp.faces)
+    data = p2e(d[0, 0])
+    C = igl.eigen.MatrixXd()
+    igl.colormap(igl.COLOR_MAP_TYPE_VIRIDIS, data, True, C)
+
+    viewer = igl.glfw.Viewer()
+    viewer.data().clear()
+    viewer.data().set_mesh(V, F)
+    viewer.data().set_colors(C)
+    viewer.launch()
 
 if __name__ == '__main__':
-    test2("DX")
+    # test2("DY")
+    test3("mnist_ico3.gzip")
+    # test4()
