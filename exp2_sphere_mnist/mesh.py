@@ -1,4 +1,3 @@
-import numpy as np
 from mesh_utils import *
 import scipy.sparse as sparse
 import pyigl as igl
@@ -16,10 +15,17 @@ class icosphere(object):
             self.normalize()
         self.lat, self.long = self.xyz2latlong()
         self.nf, self.nv = self.faces.shape[0], self.vertices.shape[0]
+        self.nf = 20 * (4 ** self.level)
+        self.ne = 30 * (4 ** self.level)
+        self.nv = self.ne - self.nf + 2
+        self.nv_prev = int((self.ne / 4) - (self.nf / 4) + 2)
+        self.nv_next = int((self.ne * 4) - (self.nf * 4) + 2)
+
         self.construct_matrices()
         self.info = {"V": self.vertices,
                      "F": self.faces,
                      "nv_prev": self.nv_prev,
+                     "nv_next": self.nv_next,
                      "G": self.G,
                      "L": self.L,
                      "N": self.N,
