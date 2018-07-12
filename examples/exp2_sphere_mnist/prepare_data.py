@@ -6,7 +6,7 @@ import numpy as np
 import argparse
 from torchvision import datasets
 from utils import interp_r2tos2
-from tqdm import tqdm_notebook as tqdm
+from tqdm import tqdm
 
 
 NORTHPOLE_EPSILON = 1e-3
@@ -219,8 +219,7 @@ def main():
     parser.add_argument("--mesh_file",
                         help="path to mesh file",
                         type=str,
-                        default="mesh_files/icosphere_3.pkl",
-                        required=True)
+                        default="mesh_files/icosphere_3.pkl")
     
     args = parser.parse_args()
 
