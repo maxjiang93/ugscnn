@@ -60,7 +60,7 @@ class MeshConv(nn.Module):
         return output
 
 
-def MeshConv_transpose(nn.module):
+class MeshConv_transpose(nn.Module):
     def __init__(self, in_channels, out_channels, mesh_file, device=torch.device("cuda"), stride=2, bias=True):
         assert(stride == 2)
         super(MeshConv_transpose, self).__init__()
