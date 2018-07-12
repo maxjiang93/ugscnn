@@ -4,6 +4,8 @@ import sys
 import numpy as np
 import pickle, gzip
 
+import sys
+sys.path.append("../../meshcnn")
 from utils import sparse2tensor, spmatmul, MNIST_S2_Loader
 from ops import MeshConv
 from model import LeNet
@@ -63,13 +65,12 @@ def main():
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
-    parser.add_argument('--mesh_folder', type=str, default="mesh_files",
+    parser.add_argument('--mesh_folder', type=str, required=True,
                         help='path to mesh folder (default: mesh_files)')
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
-    args = parser.parse_args('')
-    # use_cuda = not args.no_cuda and torch.cuda.is_available()
-    use_cuda = False
+    args = parser.parse_args()
+    use_cuda = not args.no_cuda and torch.cuda.is_available()
 
     torch.manual_seed(args.seed)
 
@@ -80,7 +81,8 @@ def main():
     testset = MNIST_S2_Loader("mnist_ico3.gzip", "test")
     train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = DataLoader(testset, batch_size=args.batch_size, shuffle=True, **kwargs)
-
+    
+    print(args.mesh_folder)
     model = LeNet(device=device, mesh_folder=args.mesh_folder).to(device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 
