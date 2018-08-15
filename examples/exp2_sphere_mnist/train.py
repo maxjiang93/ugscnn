@@ -69,10 +69,9 @@ def main():
                         help='path to mesh folder (default: mesh_files)')
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--isotropic', action='store_true', default=False,
-                        help='use isotropic kernels for rotational invariance')
     parser.add_argument('--datafile', type=str, default="mnist_ico4.gzip",
-                        help='use isotropic kernels for rotational invariance')
+                        help='data file containing preprocessed spherical mnist data')
+
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -86,7 +85,7 @@ def main():
     train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = DataLoader(testset, batch_size=args.batch_size, shuffle=True, **kwargs)
     
-    model = LeNet(mesh_folder=args.mesh_folder, isotropic=args.isotropic).to(device)
+    model = LeNet(mesh_folder=args.mesh_folder).to(device)
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
     print("Number of trainable model parameters: {0}".format(count_parameters(model)))
