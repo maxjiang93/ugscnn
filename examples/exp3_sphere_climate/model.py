@@ -2,18 +2,20 @@ from torch import nn
 from ops import MeshConv, MeshConv_transpose
 import torch.nn.functional as F
 import os
+import torch
+import pickle
 
 
-class DoubleConv(nn.module):
+class DoubleConv(nn.Module):
     '''(conv => BN => ReLU) * 2'''
-    def __init__(self, in_ch, out_ch, mesh_file, device=torch.device("cuda"), bias=True):
+    def __init__(self, in_ch, out_ch, mesh_file, bias=True):
         super(DoubleConv, self).__init__()
         self.conv = nn.Sequential(
-            MeshConv(in_ch, out_ch, mesh_file, device, stride=1),
-            nn.BatchNorm1d(out_ch),
+            MeshConv(in_ch, out_ch, mesh_file, stride=1),
+            nn.BatchNorm1d(out_ch).cuda(),
             nn.ReLU(inplace=True),
-            MeshConv(in_ch, out_ch, mesh_file, device, stride=1),
-            nn.BatchNorm1d(out_ch),
+            MeshConv(out_ch, out_ch, mesh_file, stride=1),
+            nn.BatchNorm1d(out_ch).cuda(),
             nn.ReLU(inplace=True)
         )
 
@@ -22,14 +24,17 @@ class DoubleConv(nn.module):
         return x
 
 
-class Up(nn.module):
-    def __init__(self, in_ch, out_ch, mesh_file, device=torch.device("cuda"), bias=True):
+class Up(nn.Module):
+    def __init__(self, in_ch, out_ch, mesh_file, bias=True):
         """
         use mesh_file for the mesh of one-level up
         """
         super(Up, self).__init__()
+        self.in_ch = in_ch
+        self.out_ch = out_ch
         self.up = MeshConv_transpose(int(in_ch/2), int(in_ch/2), mesh_file, stride=2)
         self.conv = DoubleConv(in_ch, out_ch, mesh_file)
+        self.mesh_file = mesh_file
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
@@ -37,8 +42,8 @@ class Up(nn.module):
         x = self.conv(x)
         return x
 
-class Down(nn.module):
-    def __init__(self, in_ch, out_ch, mesh_file, device=torch.device("cuda"), bias=True):
+class Down(nn.Module):
+    def __init__(self, in_ch, out_ch, mesh_file, bias=True):
         """
         use mesh_file for the mesh of one-level down
         """
@@ -46,25 +51,27 @@ class Down(nn.module):
         pkl = pickle.load(open(mesh_file, "rb"))
         self.nv_prev = pkl['V'].shape[0]
         self.conv = DoubleConv(in_ch, out_ch, mesh_file)
+        self.in_ch = in_ch
+        self.out_ch = out_ch
+        self.mesh_file = mesh_file
 
     def forward(self, x):
-        x = x[:, :self.nv_prev, :]
+        x = x[:, :, :self.nv_prev]
         x = self.conv(x)
         return x
 
 class UNet(nn.Module):
-    def __init__(self, device, mesh_folder, in_ch, out_ch, max_level=7, min_level=0, fdim=16):
-        super(LeNet, self).__init__()
+    def __init__(self, mesh_folder, in_ch, out_ch, max_level=7, min_level=0, fdim=16):
+        super(UNet, self).__init__()
         self.mesh_folder = mesh_folder
         self.fdim = fdim
         self.max_level = max_level
         self.min_level = min_level
         self.levels = max_level - min_level
-        self.device = device
         self.down = []
         self.up = []
-        self.in_conv = MeshConv(in_ch, fdim, self.__meshfile(max_level), device, stride=1)
-        self.out_conv = MeshConv(fdim, out_ch, self.__meshfile(max_level), device, stride=1)
+        self.in_conv = MeshConv(in_ch, fdim, self.__meshfile(max_level), stride=1)
+        self.out_conv = MeshConv(fdim, out_ch, self.__meshfile(max_level), stride=1)
         # Downward path
         for i in range(self.levels-1):
             self.down.append(Down(fdim*(2**i), fdim*(2**(i+1)), self.__meshfile(max_level-i-1)))
@@ -79,10 +86,10 @@ class UNet(nn.Module):
         for i in range(self.levels):
             x_.append(self.down[i](x_[-1]))
         x = self.up[0](x_[-1], x_[-2])
-        for i in range(self.levels):
+        for i in range(self.levels-1):
             x = self.up[i+1](x, x_[-3-i])
         x = self.out_conv(x)
         return x
 
     def __meshfile(self, i):
-        return os.path.join(self.mesh_folder, "icosphere_{i}.pkl".format(i))
+        return os.path.join(self.mesh_folder, "icosphere_{}.pkl".format(i))
