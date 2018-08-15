@@ -85,7 +85,7 @@ def main():
     train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = DataLoader(testset, batch_size=args.batch_size, shuffle=True, **kwargs)
     
-    model = LeNet(mesh_folder=args.mesh_folder).to(device)
+    model = LeNet(device=device, mesh_folder=args.mesh_folder).to(device)
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
     print("Number of trainable model parameters: {0}".format(count_parameters(model)))
