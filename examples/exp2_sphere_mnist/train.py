@@ -26,7 +26,7 @@ def train(args, model, device, train_loader, optimizer, epoch):
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
-            sys.stdout.write('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} \r'.format(
+            sys.stdout.write('Train Epoch: {} [{}/{} ({:.0f}%)] Loss: {:.6f} \r'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.item()))
             sys.stdout.flush()
@@ -69,6 +69,9 @@ def main():
                         help='path to mesh folder (default: mesh_files)')
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
+    parser.add_argument('--datafile', type=str, default="mnist_ico4.gzip",
+                        help='data file containing preprocessed spherical mnist data')
+
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -77,14 +80,17 @@ def main():
     device = torch.device("cuda" if use_cuda else "cpu")
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-    trainset = MNIST_S2_Loader("mnist_ico3.gzip", "train")
-    testset = MNIST_S2_Loader("mnist_ico3.gzip", "test")
+    trainset = MNIST_S2_Loader(args.datafile, "train")
+    testset = MNIST_S2_Loader(args.datafile, "test")
     train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = DataLoader(testset, batch_size=args.batch_size, shuffle=True, **kwargs)
     
-    print(args.mesh_folder)
     model = LeNet(device=device, mesh_folder=args.mesh_folder).to(device)
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print("Number of trainable model parameters: {0}".format(count_parameters(model)))
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
+    # optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     for epoch in range(1, args.epochs + 1):
         train(args, model, device, train_loader, optimizer, epoch)

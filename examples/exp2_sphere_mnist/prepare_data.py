@@ -1,5 +1,6 @@
 '''Module to generate the spherical mnist data set'''
 
+import sys; sys.path.append("../../meshcnn")
 import gzip
 import pickle
 import numpy as np

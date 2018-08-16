@@ -22,7 +22,7 @@ def spmatmul(den, sp):
     batch_size, in_chan, nv = list(den.size())
     new_len = sp.size()[0]
     den = den.permute(2, 1, 0).contiguous().view(nv, -1)
-    res = sp.matmul(den).view(new_len, in_chan, batch_size).contiguous().permute(2, 1, 0)
+    res = torch.spmm(sp, den).view(new_len, in_chan, batch_size).contiguous().permute(2, 1, 0)
     return res
 
 def xyz2latlong(vertices):
