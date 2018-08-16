@@ -14,8 +14,11 @@ import importlib.machinery
 from dataset import Shrec17, CacheNPY, ToMesh, ProjectOnSphere
 
 
-def main(log_dir, model_path, augmentation, dataset, batch_size, learning_rate, num_workers):
+def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation, 
+         dataset, batch_size, learning_rate, num_workers):
     arguments = copy.deepcopy(locals())
+
+    sp_mesh_file = os.path.join(sp_mesh_dir, "icosphere_{}.pkl".format(sp_mesh_level))
 
     os.mkdir(log_dir)
     shutil.copy2(__file__, os.path.join(log_dir, "script.py"))
@@ -50,8 +53,8 @@ def main(log_dir, model_path, augmentation, dataset, batch_size, learning_rate, 
     # Increasing `repeat` will generate more cached files
     transform = CacheNPY(prefix="b{}_".format(bw), repeat=augmentation, transform=torchvision.transforms.Compose(
         [
-            ToMesh(random_rotations=True, random_translation=0.1),
-            ProjectOnSphere(bandwidth=bw)
+            ToMesh(random_rotations=False, random_translation=0.1),
+            ProjectOnSphere(meshfile=sp_mesh_file)
         ]
     ))
 
@@ -64,7 +67,7 @@ def main(log_dir, model_path, augmentation, dataset, batch_size, learning_rate, 
                    '04401088', '04460130', '04468005', '04530566', '04554684']
         return classes.index(x[0])
 
-    train_set = Shrec17("data", dataset, perturbed=True, download=True, transform=transform, target_transform=target_transform)
+    train_set = Shrec17("data", dataset, perturbed=False, download=True, transform=transform, target_transform=target_transform)
 
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
 
@@ -136,6 +139,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--num_workers", type=int, default=1)
     parser.add_argument("--learning_rate", type=float, default=0.5)
+    parser.add_argument("--sp_mesh_dir", type=str, default="../../mesh_files")
+    parser.add_argument("--sp_mesh_level", type=int, default=5)
 
     args = parser.parse_args()
 

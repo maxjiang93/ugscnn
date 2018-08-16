@@ -8,8 +8,34 @@ import torch
 import torch.utils.data
 import trimesh
 import logging
+import pickle
 
 logging.getLogger('pyembree').disabled = True
+
+
+def rotmat(a, b, c, hom_coord=False):  # apply to mesh using mesh.apply_transform(rotmat(a,b,c, True))
+    """
+    Create a rotation matrix with an optional fourth homogeneous coordinate
+
+    :param a, b, c: ZYZ-Euler angles
+    """
+    def z(a):
+        return np.array([[np.cos(a), np.sin(a), 0, 0],
+                         [-np.sin(a), np.cos(a), 0, 0],
+                         [0, 0, 1, 0],
+                         [0, 0, 0, 1]])
+
+    def y(a):
+        return np.array([[np.cos(a), 0, np.sin(a), 0],
+                         [0, 1, 0, 0],
+                         [-np.sin(a), 0, np.cos(a), 0],
+                         [0, 0, 0, 1]])
+
+    r = z(a).dot(y(b)).dot(z(c))  # pylint: disable=E1101
+    if hom_coord:
+        return r
+    else:
+        return r[:3, :3]
 
 
 def make_sgrid(b, alpha, beta, gamma):
@@ -119,13 +145,15 @@ class ToMesh:
 
 
 class ProjectOnSphere:
-    def __init__(self, bandwidth):
-        self.bandwidth = bandwidth
-        self.sgrid = make_sgrid(bandwidth, alpha=0, beta=0, gamma=0)
+    def __init__(self, meshfile):
+        self.meshfile = meshfile
+        pkl = pickle.load(open(meshfile, "rb"))
+        self.sgrid = pkl["V"]
+        self.level = int(meshfile.split('_')[-1].split('.')[0])
+        self.pts = self.sgrid.shape[0]
 
     def __call__(self, mesh):
-        im = render_model(mesh, self.sgrid)
-        im = im.reshape(3, 2 * self.bandwidth, 2 * self.bandwidth)
+        im = render_model(mesh, self.sgrid)  # shape 3_channels x #v
 
         from scipy.spatial.qhull import QhullError  # pylint: disable=E0611
         try:
@@ -134,7 +162,6 @@ class ProjectOnSphere:
             convex_hull = mesh
 
         hull_im = render_model(convex_hull, self.sgrid)
-        hull_im = hull_im.reshape(3, 2 * self.bandwidth, 2 * self.bandwidth)
 
         im = np.concatenate([im, hull_im], axis=0)
         assert len(im) == 6
@@ -157,7 +184,7 @@ class ProjectOnSphere:
         return im
 
     def __repr__(self):
-        return self.__class__.__name__ + '(bandwidth={0})'.format(self.bandwidth)
+        return self.__class__.__name__ + '(level={0}, points={1})'.format(self.level, self.pts)
 
 
 class CacheNPY:
@@ -216,13 +243,13 @@ class Shrec17(torch.utils.data.Dataset):
     url_data = 'http://3dvision.princeton.edu/ms/shrec17-data/{}.zip'
     url_label = 'http://3dvision.princeton.edu/ms/shrec17-data/{}.csv'
 
-    def __init__(self, root, dataset, perturbed=True, download=False, transform=None, target_transform=None):
+    def __init__(self, root, dataset, perturbed=False, download=False, transform=None, target_transform=None):
         self.root = os.path.expanduser(root)
 
         if not dataset in ["train", "test", "val"]:
             raise ValueError("Invalid dataset")
 
-        self.dir = os.path.join(self.root, dataset + ("_perturbed" if perturbed else ""))
+        self.dir = os.path.join(self.root, dataset + ("_perturbed" if perturbed else "_normal"))
         self.transform = transform
         self.target_transform = target_transform
 
@@ -334,7 +361,7 @@ class Shrec17(torch.utils.data.Dataset):
             else:
                 raise
 
-        url = self.url_data.format(dataset + ("_perturbed" if perturbed else ""))
+        url = self.url_data.format(dataset + ("_perturbed" if perturbed else "_normal"))
         file_path = self._download(url)
         self._unzip(file_path)
         self._fix()
