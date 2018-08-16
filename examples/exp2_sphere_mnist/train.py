@@ -14,6 +14,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
+from torch import nn
 
 
 def train(args, model, device, train_loader, optimizer, epoch):
@@ -85,7 +86,10 @@ def main():
     train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = DataLoader(testset, batch_size=args.batch_size, shuffle=True, **kwargs)
     
-    model = LeNet(device=device, mesh_folder=args.mesh_folder).to(device)
+    model = LeNet(mesh_folder=args.mesh_folder)
+    model = nn.DataParallel(model)
+    model.to(device)
+
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
     print("Number of trainable model parameters: {0}".format(count_parameters(model)))

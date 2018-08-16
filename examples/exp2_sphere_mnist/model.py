@@ -5,13 +5,13 @@ import os
 
 
 class LeNet(nn.Module):
-    def __init__(self, device, mesh_folder):
+    def __init__(self, mesh_folder):
         super(LeNet, self).__init__()
         self.b = 16
-        self.conv1 = MeshConv(1, self.b, device=device, mesh_file=os.path.join(mesh_folder, "icosphere_4.pkl"), stride=2)
-        self.conv2 = MeshConv(self.b, 2*self.b, device=device, mesh_file=os.path.join(mesh_folder, "icosphere_3.pkl"), stride=2)
-        self.conv3 = MeshConv(2*self.b, 3*self.b, device=device, mesh_file=os.path.join(mesh_folder, "icosphere_2.pkl"), stride=2)
-        self.conv4 = MeshConv(3*self.b, 4*self.b, device=device, mesh_file=os.path.join(mesh_folder, "icosphere_1.pkl"), stride=2)
+        self.conv1 = MeshConv(1, self.b, mesh_file=os.path.join(mesh_folder, "icosphere_4.pkl"), stride=2)
+        self.conv2 = MeshConv(self.b, 2*self.b, mesh_file=os.path.join(mesh_folder, "icosphere_3.pkl"), stride=2)
+        self.conv3 = MeshConv(2*self.b, 3*self.b, mesh_file=os.path.join(mesh_folder, "icosphere_2.pkl"), stride=2)
+        self.conv4 = MeshConv(3*self.b, 4*self.b, mesh_file=os.path.join(mesh_folder, "icosphere_1.pkl"), stride=2)
         self.csize = 4*self.b*self.conv4.nv_prev
         self.conv4_drop = nn.Dropout2d()
         self.fc1 = nn.Linear(self.csize, 512)

@@ -9,10 +9,9 @@ from utils import sparse2tensor, spmatmul
 
 
 class _MeshConv(nn.Module):
-    def __init__(self, in_channels, out_channels, device, mesh_file, stride=1, bias=True):
+    def __init__(self, in_channels, out_channels, mesh_file, stride=1, bias=True):
         assert stride in [1, 2]
         super(_MeshConv, self).__init__()
-        self.device = device
         self.in_channels = in_channels
         self.out_channels = out_channels
         if bias:
@@ -20,16 +19,17 @@ class _MeshConv(nn.Module):
         else:
             self.register_parameter('bias', None)
         self.ncoeff = 4
-        self.coeffs = torch.Tensor(out_channels, in_channels, self.ncoeff)
-        self.coeffs = self.coeffs.to(self.device)
-        self.coeffs = Parameter(self.coeffs)
+        self.coeffs = Parameter(torch.Tensor(out_channels, in_channels, self.ncoeff))
         self.set_coeffs()
         # load mesh file
         pkl = pickle.load(open(mesh_file, "rb"))
         self.pkl = pkl
-        self.G = sparse2tensor(pkl['G']).to(self.device)  # gradient matrix V->F, 3#F x #V
-        self.NS = torch.tensor(pkl['NS'], dtype=torch.float32).to(self.device)  # north-south vector field, #F x 3
-        self.EW = torch.tensor(pkl['EW'], dtype=torch.float32).to(self.device)  # east-west vector field, #F x 3
+        G = sparse2tensor(pkl['G'])  # gradient matrix V->F, 3#F x #V
+        NS = torch.tensor(pkl['NS'], dtype=torch.float32)  # north-south vector field, #F x 3
+        EW = torch.tensor(pkl['EW'], dtype=torch.float32)  # east-west vector field, #F x 3
+        self.register_buffer("G", G)
+        self.register_buffer("NS", NS)
+        self.register_buffer("EW", EW)
         
     def set_coeffs(self):
         n = self.in_channels * self.ncoeff
@@ -39,17 +39,19 @@ class _MeshConv(nn.Module):
             self.bias.data.uniform_(-stdv, stdv)
 
 class MeshConv(_MeshConv):
-    def __init__(self, in_channels, out_channels, device, mesh_file, stride=1, bias=True):
-        super(MeshConv, self).__init__(in_channels, out_channels, device, mesh_file, stride, bias)
+    def __init__(self, in_channels, out_channels, mesh_file, stride=1, bias=True):
+        super(MeshConv, self).__init__(in_channels, out_channels, mesh_file, stride, bias)
         pkl = self.pkl
         if stride == 2:
             self.nv_prev = pkl['nv_prev']
-            self.L = sparse2tensor(pkl['L'].tocsr()[:self.nv_prev].tocoo()).to(self.device) # laplacian matrix V->V
-            self.F2V = sparse2tensor(pkl['F2V'].tocsr()[:self.nv_prev].tocoo()).to(self.device)  # F->V, #V x #F
+            L = sparse2tensor(pkl['L'].tocsr()[:self.nv_prev].tocoo()) # laplacian matrix V->V
+            F2V = sparse2tensor(pkl['F2V'].tocsr()[:self.nv_prev].tocoo())  # F->V, #V x #F
         else: # stride == 1
             self.nv_prev = pkl['V'].shape[0]
-            self.L = sparse2tensor(pkl['L'].tocoo()).to(self.device)
-            self.F2V = sparse2tensor(pkl['F2V'].tocoo()).to(self.device)
+            L = sparse2tensor(pkl['L'].tocoo())
+            F2V = sparse2tensor(pkl['F2V'].tocoo())
+        self.register_buffer("L", L)
+        self.register_buffer("F2V", F2V)
         
     def forward(self, input):
         # compute gradient
@@ -71,19 +73,21 @@ class MeshConv(_MeshConv):
 
 
 class MeshConv_transpose(_MeshConv):
-    def __init__(self, in_channels, out_channels, device, mesh_file, stride=2, bias=True):
+    def __init__(self, in_channels, out_channels, mesh_file, stride=2, bias=True):
         assert(stride == 2)
-        super(MeshConv_transpose, self).__init__(in_channels, out_channels, device, mesh_file, stride, bias)
-        pkl = self.pkl
-        self.nv_prev = pkl['nv_prev']
-        self.nv = pkl['V'].shape[0]
+        super(MeshConv_transpose, self).__init__(in_channels, out_channels, mesh_file, stride, bias)
+        self.nv_prev = self.pkl['nv_prev']
+        self.nv = self.pkl['V'].shape[0]
         self.nv_pad = self.nv - self.nv_prev
-        self.L = sparse2tensor(pkl['L'].tocoo()).to(self.device) # laplacian matrix V->V
-        self.F2V = sparse2tensor(pkl['F2V'].tocoo()).to(self.device) # F->V, #V x #F
+        L = sparse2tensor(pkl['L'].tocoo()) # laplacian matrix V->V
+        F2V = sparse2tensor(pkl['F2V'].tocoo()) # F->V, #V x #F
+        self.register_buffer("L", L)
+        self.register_buffer("F2V", F2V)
         
     def forward(self, input):
         # pad input with zeros up to next mesh resolution
-        input = torch.cat((input, torch.ones(*input.size()[:2], self.nv_pad).to(self.device)), dim=-1)
+        ones_pad = torch.ones(*input.size()[:2], self.nv_pad).to(input.device)
+        input = torch.cat((input, ones_pad), dim=-1)
         # compute gradient
         grad_face = spmatmul(input, self.G)
         grad_face = grad_face.view(*(input.size()[:2]), 3, -1).permute(0, 1, 3, 2) # gradient, 3 component per face
