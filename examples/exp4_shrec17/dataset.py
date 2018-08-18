@@ -166,18 +166,22 @@ class ProjectOnSphere:
         im = np.concatenate([im, hull_im], axis=0)
         assert len(im) == 6
 
-        im[0] -= 0.75
-        im[0] /= 0.26
-        im[1] -= 0.59
-        im[1] /= 0.50
-        im[2] -= 0.54
-        im[2] /= 0.29
-        im[3] -= 0.52
-        im[3] /= 0.19
-        im[4] -= 0.80
-        im[4] /= 0.18
-        im[5] -= 0.51
-        im[5] /= 0.25
+        # take absolute value of normal
+        im[1] = np.absolute(im[1])
+        im[4] = np.absolute(im[4])
+
+        im[0] -= 0.76395196
+        im[0] /= 0.2719352
+        im[1] -= 0.6592677
+        im[1] /= 0.2804216
+        im[2] -= 0.5881865
+        im[2] /= 0.2835306
+        im[3] -= 0.5799111
+        im[3] /= 0.22628741
+        im[4] -= 0.74728245
+        im[4] /= 0.2068941
+        im[5] -= 0.5810473
+        im[5] /= 0.24289656
 
         im = im.astype(np.float32)  # pylint: disable=E1101
 

@@ -2,6 +2,7 @@
 import torch
 import torch.nn.functional as F
 import torchvision
+from torch import nn
 
 import os
 import shutil
@@ -15,7 +16,7 @@ from dataset import Shrec17, CacheNPY, ToMesh, ProjectOnSphere
 
 
 def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation, 
-         dataset, batch_size, learning_rate, num_workers):
+         dataset, batch_size, learning_rate, num_workers, epochs):
     arguments = copy.deepcopy(locals())
 
     sp_mesh_file = os.path.join(sp_mesh_dir, "icosphere_{}.pkl".format(sp_mesh_level))
@@ -41,17 +42,16 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation,
     mod = types.ModuleType(loader.name)
     loader.exec_module(mod)
 
-    model = mod.Model(55)
+    model = mod.Model(55, mesh_folder=sp_mesh_dir)
+    model = nn.DataParallel(model)
     model.cuda()
 
     logger.info("{} paramerters in total".format(sum(x.numel() for x in model.parameters())))
-    logger.info("{} paramerters in the last layer".format(sum(x.numel() for x in model.out_layer.parameters())))
-
-    bw = model.bandwidths[0]
+    logger.info("{} paramerters in the last layer".format(sum(x.numel() for x in model.module.out_layer.parameters())))
 
     # Load the dataset
     # Increasing `repeat` will generate more cached files
-    transform = CacheNPY(prefix="b{}_".format(bw), repeat=augmentation, transform=torchvision.transforms.Compose(
+    transform = CacheNPY(prefix="sp{}_".format(sp_mesh_level), repeat=augmentation, transform=torchvision.transforms.Compose(
         [
             ToMesh(random_rotations=False, random_translation=0.1),
             ProjectOnSphere(meshfile=sp_mesh_file)
@@ -97,7 +97,7 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation,
                 return lr * learning_rate
         return lrs[-1] * learning_rate
 
-    for epoch in range(300):
+    for epoch in range(epochs):
 
         lr = get_learning_rate(epoch)
         logger.info("learning rate = {} and batch size = {}".format(lr, train_loader.batch_size))
@@ -141,6 +141,7 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", type=float, default=0.5)
     parser.add_argument("--sp_mesh_dir", type=str, default="../../mesh_files")
     parser.add_argument("--sp_mesh_level", type=int, default=5)
+    parser.add_argument("--epochs", type=int, default=300)
 
     args = parser.parse_args()
 
