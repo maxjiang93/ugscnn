@@ -11,6 +11,7 @@ import logging
 import copy
 import types
 import importlib.machinery
+from collections import OrderedDict
 
 from dataset import Shrec17, CacheNPY, ToMesh, ProjectOnSphere
 
@@ -123,7 +124,11 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation,
                 time.perf_counter() - time_before_step))
             time_before_load = time.perf_counter()
 
-        torch.save(model.state_dict(), os.path.join(log_dir, "state.pkl"))
+        # remove sparse matrices since they cannot be stored
+        state_dict_no_sparse = [it for it in model.state_dict().items() if it[1].type() != "torch.cuda.sparse.FloatTensor"]
+        state_dict_no_sparse = OrderedDict(state_dict_no_sparse)
+        # from pdb import set_trace; set_trace()
+        torch.save(state_dict_no_sparse, os.path.join(log_dir, "state.pkl"))
 
 
 if __name__ == "__main__":

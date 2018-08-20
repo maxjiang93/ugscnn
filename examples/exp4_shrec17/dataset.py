@@ -229,6 +229,7 @@ class CacheNPY:
             try:
                 img = np.load(npy_path.format(i))
             except (OSError, FileNotFoundError):
+                print(file_path)
                 img = self.check_trans(file_path)
                 np.save(npy_path.format(i), img)
             output.append(img)
