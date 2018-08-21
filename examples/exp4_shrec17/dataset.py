@@ -145,12 +145,15 @@ class ToMesh:
 
 
 class ProjectOnSphere:
-    def __init__(self, meshfile):
+    def __init__(self, meshfile, dataset, normalize=True):
         self.meshfile = meshfile
         pkl = pickle.load(open(meshfile, "rb"))
         self.sgrid = pkl["V"]
         self.level = int(meshfile.split('_')[-1].split('.')[0])
         self.pts = self.sgrid.shape[0]
+        self.normalize = normalize
+        assert(dataset in ["shrec17", "modelnet10", "modelnet40"])
+        self.dataset = dataset
 
     def __call__(self, mesh):
         im = render_model(mesh, self.sgrid)  # shape 3_channels x #v
@@ -170,18 +173,35 @@ class ProjectOnSphere:
         im[1] = np.absolute(im[1])
         im[4] = np.absolute(im[4])
 
-        im[0] -= 0.76395196
-        im[0] /= 0.2719352
-        im[1] -= 0.6592677
-        im[1] /= 0.2804216
-        im[2] -= 0.5881865
-        im[2] /= 0.2835306
-        im[3] -= 0.5799111
-        im[3] /= 0.22628741
-        im[4] -= 0.74728245
-        im[4] /= 0.2068941
-        im[5] -= 0.5810473
-        im[5] /= 0.24289656
+        if self.normalize and self.dataset == 'shrec17':
+            im[0] -= 0.76395196
+            im[0] /= 0.2719352
+            im[1] -= 0.6592677
+            im[1] /= 0.2804216
+            im[2] -= 0.5881865
+            im[2] /= 0.2835306
+            im[3] -= 0.5799111
+            im[3] /= 0.22628741
+            im[4] -= 0.74728245
+            im[4] /= 0.2068941
+            im[5] -= 0.5810473
+            im[5] /= 0.24289656
+        elif self.normalize and self.dataset == 'modelnet10':
+            im[0] -= -0.18395948
+            im[0] /= 1.0523905
+            im[1] -= 0.06655659
+            im[1] /= 0.9067877
+            im[2] -= 0.08985221
+            im[2] /= 0.92258495
+            im[3] -= -0.40606934
+            im[3] /= 0.848407
+            im[4] -= 0.15714426
+            im[4] /= 0.8563811
+            im[5] -= -0.10472725
+            im[5] /= 0.93723893
+        # modelnet10:
+        #[-0.18395948  0.06655659  0.08985221 -0.40606934  0.15714426 -0.10472725]
+        #[1.0523905  0.9067877  0.92258495 0.848407   0.8563811  0.93723893]
 
         im = im.astype(np.float32)  # pylint: disable=E1101
 
@@ -376,3 +396,56 @@ class Shrec17(torch.utils.data.Dataset):
             self._download(url)
 
         print('Done!')
+
+
+class ModelNet(torch.utils.data.Dataset):
+    '''
+    Process ModelNet(10/40) and output valid obj files content
+    '''
+
+    def __init__(self, root, dataset, partition, transform=None, target_transform=None):
+        self.root = os.path.expanduser(root)
+
+        if not dataset in ["modelnet10", "modelnet40"]:
+            raise ValueError("Invalid dataset [modelnet10/modelnet40]")
+        if not partition in ["train", "test"]:
+            raise ValueError("Invalid partition [train/test]")
+
+        self.dir = os.path.join(self.root, dataset + "_" + partition)
+        self.transform = transform
+        self.target_transform = target_transform
+
+        if not self._check_exists():
+            raise RuntimeError('Dataset not found.')
+
+        self.files = sorted(glob.glob(os.path.join(self.dir, '*.obj')))
+ 
+        self.labels = {}
+        for fpath in self.files:
+            fname = os.path.splitext(os.path.basename(fpath))[0]
+            self.labels[fname] = "_".join(fname.split('_')[:-1]) # extract label. this is to deal with night_stand
+
+    def __getitem__(self, index):
+        img = f = self.files[index]
+
+        if self.transform is not None:
+            try:
+                img = self.transform(img)
+            except:
+                print("                     Failing model: {}".format(f))
+
+        i = os.path.splitext(os.path.basename(f))[0]
+        target = self.labels[i]
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return img, target
+
+    def __len__(self):
+        return len(self.files)
+
+    def _check_exists(self):
+        files = glob.glob(os.path.join(self.dir, "*.obj"))
+
+        return len(files) > 0
