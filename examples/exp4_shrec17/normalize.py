@@ -44,8 +44,7 @@ class StatsRecorder:
 
             self.nobservations += n
 
-def compute_stats():
-	data_dir = "data/train_normal"
+def compute_stats(data_dir):
 	files = sorted(glob(os.path.join(data_dir, "*.npy")))
 	sr = StatsRecorder()
 	for f in tqdm(files):
@@ -55,8 +54,7 @@ def compute_stats():
 	print(sr.std)
 	return sr.mean, sr.std
 
-def normalize_data(mean, std):
-	data_dir = "data/train_normal"
+def normalize_data(mean, std, data_dir):
 	files = sorted(glob(os.path.join(data_dir, "*.npy")))
 	for f in tqdm(files):
 		u = np.load(f)
@@ -65,5 +63,6 @@ def normalize_data(mean, std):
 		np.save(new_f, v.T)
 
 # mean, std = compute_stats()
-compute_stats()
-normalize_data(mean, std)
+data_dir = "data/modelnet10_train"
+mean, std = compute_stats(data_dir)
+# normalize_data(mean, std, data_dir)

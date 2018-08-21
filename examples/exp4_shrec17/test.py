@@ -4,7 +4,7 @@ import numpy as np
 import shutil
 import requests
 import zipfile
-from dataset import Shrec17, CacheNPY, ToMesh, ProjectOnSphere
+from dataset import ModelNet, CacheNPY, ToMesh, ProjectOnSphere
 from subprocess import check_output
 import torch
 from torch import nn
