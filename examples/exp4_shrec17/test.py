@@ -31,7 +31,7 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, augmentation, dataset, batch_size,
     transform = torchvision.transforms.Compose([
         CacheNPY(prefix="sp5_", repeat=augmentation, pick_randomly=False, transform=torchvision.transforms.Compose(
             [
-                ToMesh(random_rotations=False, random_translation=0.1),
+                ToMesh(random_rotations=False, random_translation=0),
                 ProjectOnSphere(meshfile=sp_mesh_file)
             ]
         )),
@@ -123,19 +123,23 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, augmentation, dataset, batch_size,
         with open(idfile, "w") as f:
             f.write("\n".join(retrieved))
 
+    # download evaluator if it does not exist
     url = "https://shapenet.cs.stanford.edu/shrec17/code/evaluator.zip"
     file_path = "evaluator.zip"
 
-    r = requests.get(url, stream=True, verify=False)
-    with open(file_path, 'wb') as f:
-        for chunk in r.iter_content(chunk_size=16 * 1024 ** 2):
-            if chunk:  # filter out keep-alive new chunks
-                f.write(chunk)
-                f.flush()
+    if not os.path.isdir("evaluator") and not os.path.exists(file_path):
+        r = requests.get(url, stream=True, verify=False)
 
-    zip_ref = zipfile.ZipFile(file_path, 'r')
-    zip_ref.extractall(".")
-    zip_ref.close()
+    if not os.path.isdir("evaluator"):
+        with open(file_path, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=16 * 1024 ** 2):
+                if chunk:  # filter out keep-alive new chunks
+                    f.write(chunk)
+                    f.flush()
+
+        zip_ref = zipfile.ZipFile(file_path, 'r')
+        zip_ref.extractall(".")
+        zip_ref.close()
 
     print(check_output(["nodejs", "evaluate.js", os.path.join("..", log_dir) + "/"], cwd="evaluator").decode("utf-8"))
     shutil.copy2(os.path.join("evaluator", log_dir.replace("/", "") + ".summary.csv"), os.path.join(log_dir, "summary.csv"))
