@@ -15,6 +15,10 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch import nn
+import torch.distributed as dist
+import torch.utils.data.distributed
+from torch.nn.parallel.distributed_cpu import DistributedDataParallelCPU
+from torch.utils.data.distributed import DistributedSampler
 
 
 def train(args, model, device, train_loader, optimizer, epoch):
@@ -72,6 +76,7 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--datafile', type=str, default="mnist_ico4.gzip",
                         help='data file containing preprocessed spherical mnist data')
+    parser.add_argument('--dist_cpu', action='store_true')
 
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -80,15 +85,28 @@ def main():
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
+    if args.dist_cpu:
+        dist.init_process_group(backend='mpi')
+
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
     trainset = MNIST_S2_Loader(args.datafile, "train")
     testset = MNIST_S2_Loader(args.datafile, "test")
-    train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, **kwargs)
-    test_loader = DataLoader(testset, batch_size=args.batch_size, shuffle=True, **kwargs)
+    if args.dist_cpu:
+        train_sampler = DistributedSampler(trainset)
+        test_sampler = DistributedSampler(testset)
+    else:
+        train_sampler = None
+        test_sampler = None
+    train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=(train_sampler is None), 
+                              sampler=train_sampler, **kwargs)
+    test_loader = DataLoader(testset, batch_size=args.batch_size, shuffle=(test_sampler is None), 
+                              sampler=test_sampler, **kwargs)
     
     model = LeNet(mesh_folder=args.mesh_folder)
     model = nn.DataParallel(model)
     model.to(device)
+    if args.dist_cpu:
+        model = DistributedDataParallelCPU(model)
 
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -97,6 +115,9 @@ def main():
     # optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     for epoch in range(1, args.epochs + 1):
+        if args.dist_cpu:
+            train_sampler.set_epoch(epoch)
+            test_sampler.set_epoch(epoch)
         train(args, model, device, train_loader, optimizer, epoch)
         test(args, model, device, test_loader)
 
