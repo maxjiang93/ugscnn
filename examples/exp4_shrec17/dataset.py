@@ -187,22 +187,37 @@ class ProjectOnSphere:
             im[5] -= 0.5810473
             im[5] /= 0.24289656
         elif self.normalize and self.dataset == 'modelnet10':
-            im[0] -= -0.18395948
-            im[0] /= 1.0523905
-            im[1] -= 0.06655659
-            im[1] /= 0.9067877
-            im[2] -= 0.08985221
-            im[2] /= 0.92258495
-            im[3] -= -0.40606934
-            im[3] /= 0.848407
-            im[4] -= 0.15714426
-            im[4] /= 0.8563811
-            im[5] -= -0.10472725
-            im[5] /= 0.93723893
+            im[0] -= 0.7203571
+            im[0] /= 0.2807092
+            im[1] -= 0.6721025
+            im[1] /= 0.2561926
+            im[2] -= 0.6199647
+            im[2] /= 0.26200315
+            im[3] -= 0.49367973
+            im[3] /= 0.19068004
+            im[4] -= 0.7766791
+            im[4] /= 0.17894566
+            im[5] -= 0.55923575
+            im[5] /= 0.22804247
+        elif self.normalize and self.dataset == 'modelnet40':
+            im[0] -= 0.7139052
+            im[0] /= 0.27971452
+            im[1] -= 0.6935615
+            im[1] /= 0.2606435
+            im[2] -= 0.5850884
+            im[2] /= 0.27366385
+            im[3] -= 0.53355956
+            im[3] /= 0.21440032
+            im[4] -= 0.76255935
+            im[4] /= 0.19869797
+            im[5] -= 0.5651189
+            im[5] /= 0.24401328
         # modelnet10:
-        #[-0.18395948  0.06655659  0.08985221 -0.40606934  0.15714426 -0.10472725]
-        #[1.0523905  0.9067877  0.92258495 0.848407   0.8563811  0.93723893]
-
+        #[0.7203571  0.6721025  0.6199647  0.49367973 0.7766791  0.55923575]
+        #[0.2807092  0.2561926  0.26200315 0.19068004 0.17894566 0.22804247]
+        # modelnet40:
+        #[0.7139052  0.6935615  0.5850884  0.53355956 0.76255935 0.5651189 ]
+        #[0.27971452 0.2606435  0.27366385 0.21440032 0.19869797 0.24401328]
         im = im.astype(np.float32)  # pylint: disable=E1101
 
         return im
@@ -400,12 +415,12 @@ class Shrec17(torch.utils.data.Dataset):
 
 class ModelNet(torch.utils.data.Dataset):
     '''
-    Process ModelNet(10/40) and output valid obj files content
+    Process ModelNet(10/40) and output valid obj/off files content
     '''
 
-    def __init__(self, root, dataset, partition, transform=None, target_transform=None):
+    def __init__(self, root, dataset, partition, transform=None, target_transform=None, ftype='off'):
         self.root = os.path.expanduser(root)
-
+        self.ftype = ftype
         if not dataset in ["modelnet10", "modelnet40"]:
             raise ValueError("Invalid dataset [modelnet10/modelnet40]")
         if not partition in ["train", "test"]:
@@ -418,7 +433,7 @@ class ModelNet(torch.utils.data.Dataset):
         if not self._check_exists():
             raise RuntimeError('Dataset not found.')
 
-        self.files = sorted(glob.glob(os.path.join(self.dir, '*.obj')))
+        self.files = sorted(glob.glob(os.path.join(self.dir, '*.'+self.ftype)))
  
         self.labels = {}
         for fpath in self.files:
@@ -446,6 +461,6 @@ class ModelNet(torch.utils.data.Dataset):
         return len(self.files)
 
     def _check_exists(self):
-        files = glob.glob(os.path.join(self.dir, "*.obj"))
+        files = glob.glob(os.path.join(self.dir, '*.'+self.ftype))
 
         return len(files) > 0
