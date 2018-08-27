@@ -2,12 +2,23 @@ from mesh_utils import *
 import scipy.sparse as sparse
 import pyigl as igl
 import pickle
+import os
+
+
+def export_spheres(int_list, dest_folder):
+    if not os.path.isdir(dest_folder):
+        os.makedirs(dest_folder)
+    fname = os.path.join(dest_folder, "icosphere_{}.pkl")
+    for i in int_list:
+        s = icosphere(i)
+        s.export_mesh_info(fname.format(i))
 
 
 class icosphere(object):
     def __init__(self, level=0):
         self.level = level
         self.vertices, self.faces = self.icosahedron()
+        self.v0, self.f0 = self.vertices.copy(), self.faces.copy()
         self.nv_prev = self.vertices.shape[0]
         for l in range(self.level):
             self.nv_prev = self.vertices.shape[0]
@@ -31,7 +42,9 @@ class icosphere(object):
                      "N": self.N,
                      "NS": self.NS,
                      "EW": self.EW,
-                     "F2V": self.F2V}
+                     "F2V": self.F2V,
+                     "M": self.M,
+                     "Seq": self.Seq}
 
     def subdivide(self):
         """
@@ -81,7 +94,7 @@ class icosphere(object):
         offset = radius - scalar
         self.vertices += unit * offset.reshape((-1, 1))
         
-    def icosahedron(self):
+    def icosahedron(self, upward=True):
         """
         Create an icosahedron, a 20 faced polyhedron.
         """
@@ -95,6 +108,8 @@ class icosphere(object):
         # make every vertex have radius 1.0
         vertices = np.reshape(vertices, (-1, 3)) / 1.9021130325903071
         faces = np.reshape(faces, (-1, 3))
+        if upward:
+            vertices = self._upward(vertices, faces)
         return vertices, faces
 
     def xyz2latlong(self):
@@ -103,6 +118,94 @@ class icosphere(object):
         xy2 = x**2 + y**2
         lat = np.arctan2(z, np.sqrt(xy2))
         return lat, long
+
+    def _upward(self, V_ico, F_ico, ind=11):
+        V0 = V_ico[ind]
+        Z0 = np.array([0, 0, 1])
+        k = np.cross(V0, Z0)
+        ct = np.dot(V0, Z0)
+        st = -np.linalg.norm(k)
+        R = self._rot_matrix(k, ct, st)
+        V_ico = V_ico.dot(R)
+        # rotate a neighbor to align with (+y)
+        ni = self._find_neighbor(F_ico, ind)[0]
+        vec = V_ico[ni].copy()
+        vec[2] = 0
+        vec = vec/np.linalg.norm(vec)
+        y_ = np.eye(3)[1]
+
+        k = np.eye(3)[2]
+        crs = np.cross(vec, y_)
+        ct = -np.dot(vec, y_)
+        st = -np.sign(crs[-1])*np.linalg.norm(crs)
+        R2 = self._rot_matrix(k, ct, st)
+        V_ico = V_ico.dot(R2)
+        return V_ico
+
+    def _find_neighbor(self, F, ind):
+        """find a icosahedron neighbor of vertex i"""
+        FF = [F[i] for i in range(F.shape[0]) if ind in F[i]]
+        FF = np.concatenate(FF)
+        FF = np.unique(FF)
+        neigh = [f for f in FF if f != ind]
+        return neigh
+
+    def _rot_matrix(self, rot_axis, cos_t, sin_t):
+        k = rot_axis / np.linalg.norm(rot_axis)
+        I = np.eye(3)
+
+        R = []
+        for i in range(3):
+            v = I[i]
+            vr = v*cos_t+np.cross(k, v)*sin_t+k*(k.dot(v))*(1-cos_t)
+            R.append(vr)
+        R = np.stack(R, axis=-1)
+        return R
+
+    def _ico_rot_matrix(self, ind):
+        """
+        return rotation matrix to perform permutation corresponding to 
+        moving a certain icosahedron node to the top
+        """
+        v0_ = self.v0.copy()
+        f0_ = self.f0.copy()
+        V0 = v0_[ind]
+        Z0 = np.array([0, 0, 1])
+
+        # rotate the point to the top (+z)
+        k = np.cross(V0, Z0)
+        ct = np.dot(V0, Z0)
+        st = -np.linalg.norm(k)
+        R = self._rot_matrix(k, ct, st)
+        v0_ = v0_.dot(R)
+
+        # rotate a neighbor to align with (+y)
+        ni = self._find_neighbor(f0_, ind)[0]
+        vec = v0_[ni].copy()
+        vec[2] = 0
+        vec = vec/np.linalg.norm(vec)
+        y_ = np.eye(3)[1]
+
+        k = np.eye(3)[2]
+        crs = np.cross(vec, y_)
+        ct = np.dot(vec, y_)
+        st = -np.sign(crs[-1])*np.linalg.norm(crs)
+
+        R2 = self._rot_matrix(k, ct, st)
+        return R.dot(R2)
+
+    def _rotseq(self, V, acc=9):
+        """sequence to move an original node on icosahedron to top"""
+        seq = []
+        for i in range(11):
+            Vr = V.dot(self._ico_rot_matrix(i))
+            # lexsort
+            s1 = np.lexsort(np.round(V.T, acc))
+            s2 = np.lexsort(np.round(Vr.T, acc))
+            s = s1[np.argsort(s2)]
+            seq.append(s)
+        return tuple(seq)
+
 
     def construct_matrices(self):
         """
@@ -113,16 +216,20 @@ class icosphere(object):
         # Compute gradient operator: #F*3 by #V
         G = igl.eigen.SparseMatrixd()
         L = igl.eigen.SparseMatrixd()
+        M = igl.eigen.SparseMatrixd()
         N = igl.eigen.MatrixXd()
         A = igl.eigen.MatrixXd()
         igl.grad(V, F, G)
         igl.cotmatrix(V, F, L)
         igl.per_face_normals(V, F, N)
         igl.doublearea(V, F, A)
+        igl.massmatrix(V, F, igl.MASSMATRIX_TYPE_VORONOI, M)
         G = e2p(G)
         L = e2p(L)
         N = e2p(N)
         A = e2p(A)
+        M = e2p(M)
+        M = M.data
         # Compute latitude and longitude directional vector fields
         NS = np.reshape(G.dot(self.lat), [self.nf, 3], order='F')
         EW = np.cross(NS, N)
@@ -143,8 +250,20 @@ class icosphere(object):
         self.NS = NS  # north-south vectors (per-triangle)
         self.EW = EW  # east-west vectors (per-triangle)
         self.F2V = F2V  # map face quantities to vertices
+        self.M = M # mass matrix (area of voronoi cell around node. for integration)
+        self.Seq = self._rotseq(self.vertices)
 
     def export_mesh_info(self, filename):
         """Write mesh info as pickle file"""
         with open(filename, "wb") as f:
             pickle.dump(self.info, f)
+
+# s = icosphere(0)
+# import pyigl as igl
+# from iglhelpers import p2e
+# # visualize
+# v = p2e(s.vertices)
+# f = p2e(s.faces)
+# viewer = igl.glfw.Viewer()
+# viewer.data().set_mesh(v, f)
+# viewer.launch()
