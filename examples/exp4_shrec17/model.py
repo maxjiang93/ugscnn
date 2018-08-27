@@ -61,9 +61,8 @@ class ResBlock(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, nclasses, mesh_folder):
+    def __init__(self, nclasses, mesh_folder, feat=32):
         super().__init__()
-        feat = 32
         mf = os.path.join(mesh_folder, "icosphere_5.pkl")
         self.in_conv = MeshConv(6, feat, mesh_file=mf, stride=2)
         self.in_bn = nn.BatchNorm1d(feat)
@@ -75,16 +74,13 @@ class Model(nn.Module):
         self.avg = nn.AvgPool1d(kernel_size=self.block3.nv_prev) # output shape batch x channels x 1
         self.out_layer = nn.Linear(64*feat, nclasses)
 
-    def forward(self, x):  # pylint: disable=W0221
-        # x = self.sequential(x)  # [batch, feature, beta, alpha, gamma]
-        # x = so3_integrate(x)  # [batch, feature]
-
-        # x = self.out_layer(x)
+    def forward(self, x):
         x = self.in_block(x)
         x = self.block1(x)
         x = self.block2(x)
         x = self.block3(x)
         x = torch.squeeze(self.avg(x))
+        x = F.dropout(x, training=self.training)
         x = self.out_layer(x)
 
         return F.log_softmax(x, dim=1)

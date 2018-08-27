@@ -64,5 +64,8 @@ def normalize_data(mean, std, data_dir):
 
 # mean, std = compute_stats()
 data_dir = "data/modelnet10_train"
+data_dir2 = "data/modelnet10_test"
 mean, std = compute_stats(data_dir)
-# normalize_data(mean, std, data_dir)
+normalize_data(mean, std, data_dir)
+normalize_data(mean, std, data_dir2)
+

@@ -50,15 +50,6 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, augmentation, dataset, batch_size,
     model.cuda()
 
     pretrained_dict = torch.load(os.path.join(log_dir, "state.pkl"))
-    # model_dict = model.state_dict()
-
-    # # 1. filter out unnecessary keys
-    # pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-    # # 2. overwrite entries in the existing state dict
-    # model_dict.update(pretrained_dict) 
-    # # 3. load the new state dict
-    # model.load_state_dict(model_dict)
-
 
     def load_my_state_dict(self, state_dict):
         from torch.nn.parameter import Parameter
@@ -73,8 +64,6 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, augmentation, dataset, batch_size,
             own_state[name].copy_(param)
 
     load_my_state_dict(model, pretrained_dict)    
-
-
 
     resdir = os.path.join(log_dir, dataset + "_normal")
     if os.path.isdir(resdir):

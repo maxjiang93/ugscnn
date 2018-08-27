@@ -227,11 +227,12 @@ class ProjectOnSphere:
 
 
 class CacheNPY:
-    def __init__(self, prefix, repeat, transform, pick_randomly=True):
+    def __init__(self, prefix, repeat, transform, sp_mesh_dir, sp_mesh_level=5, pick_randomly=True):
         self.transform = transform
         self.prefix = prefix
         self.repeat = repeat
         self.pick_randomly = pick_randomly
+        self.seqs = self._get_seqs(sp_mesh_dir, sp_mesh_level)
 
     def check_trans(self, file_path):
         print("transform {}...".format(file_path))
@@ -241,35 +242,71 @@ class CacheNPY:
             print("Exception during transform of {}".format(file_path))
             raise
 
+    def _get_seqs(self, sp_mesh_dir, sp_mesh_level):
+        meshfile = os.path.join(sp_mesh_dir, "icosphere_{}.pkl".format(sp_mesh_level))
+        p = pickle.load(open(meshfile, "rb"))
+        return tuple(p["Seq"])
+
     def __call__(self, file_path):
         head, tail = os.path.split(file_path)
         root, _ = os.path.splitext(tail)
-        npy_path = os.path.join(head, self.prefix + root + '_{0}.npy')
+        npy_path = os.path.join(head, self.prefix + root + '_0.npy')
 
-        exists = [os.path.exists(npy_path.format(i)) for i in range(self.repeat)]
-
-        if self.pick_randomly and all(exists):
-            i = np.random.randint(self.repeat)
-            try: return np.load(npy_path.format(i))
-            except OSError: exists[i] = False
+        exists = os.path.exists(npy_path)
+        i = np.random.randint(12)
+        if self.pick_randomly and exists:
+            try: 
+                img = np.load(npy_path)
+                if i < 11:
+                    img = img[:, self.seqs[i]]
+                return img
+            except OSError: exists = False
 
         if self.pick_randomly:
             img = self.check_trans(file_path)
-            np.save(npy_path.format(exists.index(False)), img)
-
+            np.save(npy_path, img)
+            if i < 11:
+                img = img[:, self.seqs[i]]
             return img
 
-        output = []
-        for i in range(self.repeat):
-            try:
-                img = np.load(npy_path.format(i))
-            except (OSError, FileNotFoundError):
-                print(file_path)
-                img = self.check_trans(file_path)
-                np.save(npy_path.format(i), img)
-            output.append(img)
+        try:
+            img = np.load(npy_path)
+        except (OSError, FileNotFoundError):
+            print(file_path)
+            img = self.check_trans(file_path)
+            np.save(npy_path, img)
 
-        return output
+        return img
+
+    # def __call__(self, file_path):
+    #     head, tail = os.path.split(file_path)
+    #     root, _ = os.path.splitext(tail)
+    #     npy_path = os.path.join(head, self.prefix + root + '_{0}.npy')
+
+    #     exists = [os.path.exists(npy_path.format(i)) for i in range(self.repeat)]
+
+    #     if self.pick_randomly and all(exists):
+    #         i = np.random.randint(self.repeat)
+    #         try: return np.load(npy_path.format(i))
+    #         except OSError: exists[i] = False
+
+    #     if self.pick_randomly:
+    #         img = self.check_trans(file_path)
+    #         np.save(npy_path.format(exists.index(False)), img)
+
+    #         return img
+
+    #     output = []
+    #     for i in range(self.repeat):
+    #         try:
+    #             img = np.load(npy_path.format(i))
+    #         except (OSError, FileNotFoundError):
+    #             print(file_path)
+    #             img = self.check_trans(file_path)
+    #             np.save(npy_path.format(i), img)
+    #         output.append(img)
+
+    #     return output
 
     def __repr__(self):
         return self.__class__.__name__ + '(prefix={0}, transform={1})'.format(self.prefix, self.transform)

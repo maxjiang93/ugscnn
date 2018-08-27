@@ -1,0 +1,1 @@
+python train_modelnet.py --log_dir modelnet40_drop --model_path model.py --augmentation 1 --partition train --dataset modelnet40 --batch_size 64 --num_workers 12 --learning_rate 5e-3 --epochs 300 --feat 16 --rand_rot False

@@ -17,7 +17,7 @@ from dataset import ModelNet, CacheNPY, ToMesh, ProjectOnSphere
 
 
 def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation, 
-         dataset, partition, batch_size, learning_rate, num_workers, epochs):
+         dataset, partition, batch_size, learning_rate, num_workers, epochs, pretrain, feat, rand_rot):
     arguments = copy.deepcopy(locals())
 
     sp_mesh_file = os.path.join(sp_mesh_dir, "icosphere_{}.pkl".format(sp_mesh_level))
@@ -44,9 +44,28 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation,
     loader.exec_module(mod)
 
     num_classes = int(dataset[-2:])
-    model = mod.Model(num_classes, mesh_folder=sp_mesh_dir)
+    model = mod.Model(num_classes, mesh_folder=sp_mesh_dir, feat=feat)
     model = nn.DataParallel(model)
     model.cuda()
+
+    if pretrain:
+        pretrained_dict = torch.load(pretrain)
+
+        def load_my_state_dict(self, state_dict, exclude='out_layer'):
+            from torch.nn.parameter import Parameter
+     
+            own_state = self.state_dict()
+            for name, param in state_dict.items():
+                if name not in own_state:
+                    continue
+                if exclude in name:
+                    continue
+                if isinstance(param, Parameter):
+                    # backwards compatibility for serialized parameters
+                    param = param.data
+                own_state[name].copy_(param)
+
+        load_my_state_dict(model, pretrained_dict)    
 
     logger.info("{} paramerters in total".format(sum(x.numel() for x in model.parameters())))
     logger.info("{} paramerters in the last layer".format(sum(x.numel() for x in model.module.out_layer.parameters())))
@@ -58,7 +77,14 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation,
             ToMesh(random_rotations=False, random_translation=0),
             ProjectOnSphere(meshfile=sp_mesh_file, dataset=dataset, normalize=True)
         ]
-    ))
+    ), sp_mesh_dir=sp_mesh_dir, sp_mesh_level=sp_mesh_level, pick_randomly=rand_rot)
+
+    transform_test = CacheNPY(prefix="sp{}_".format(sp_mesh_level), repeat=augmentation, transform=torchvision.transforms.Compose(
+        [
+            ToMesh(random_rotations=False, random_translation=0),
+            ProjectOnSphere(meshfile=sp_mesh_file, dataset=dataset, normalize=True)
+        ]
+    ), sp_mesh_dir=sp_mesh_dir, sp_mesh_level=sp_mesh_level, pick_randomly=False)
 
     if dataset == 'modelnet10':
         def target_transform(x):
@@ -77,11 +103,11 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation,
 
     train_set = ModelNet("data", dataset=dataset, partition='train', transform=transform, target_transform=target_transform)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
-    test_set = ModelNet("data", dataset=dataset, partition='test', transform=transform, target_transform=target_transform)
+    test_set = ModelNet("data", dataset=dataset, partition='test', transform=transform_test, target_transform=target_transform)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=False)
 
     # optimizer = torch.optim.SGD(model.parameters(), lr=0, momentum=0.9)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     def train_step(data, target):
         model.train()
@@ -174,10 +200,13 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", choices={"modelnet10", "modelnet40"}, default="modelnet40")
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--num_workers", type=int, default=12)
-    parser.add_argument("--learning_rate", type=float, default=0.5)
+    parser.add_argument("--learning_rate", type=float, default=3e-3)
     parser.add_argument("--sp_mesh_dir", type=str, default="../../mesh_files")
     parser.add_argument("--sp_mesh_level", type=int, default=5)
     parser.add_argument("--epochs", type=int, default=300)
+    parser.add_argument("--pretrain", type=str, default=None)
+    parser.add_argument("--feat", type=int, default=32)
+    parser.add_argument("--rand_rot", type=bool, default=True)
 
     args = parser.parse_args()
 
