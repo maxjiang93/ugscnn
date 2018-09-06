@@ -8,7 +8,7 @@ import shutil
 
 from utils import sparse2tensor, spmatmul, MNIST_S2_Loader
 from ops import MeshConv
-from model import LeNet
+from model import Model
 
 import torch
 import torch.nn.functional as F
@@ -114,7 +114,7 @@ def main():
     train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = DataLoader(testset, batch_size=args.batch_size, shuffle=True, **kwargs)
     
-    model = LeNet(mesh_folder=args.mesh_folder, feat=args.feat)
+    model = Model(mesh_folder=args.mesh_folder, feat=args.feat)
     model = nn.DataParallel(model)
     model.to(device)
 

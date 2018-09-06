@@ -5,31 +5,6 @@ import sys; sys.path.append("../../meshcnn")
 from ops import MeshConv
 import os
 
-# class LeNet(nn.Module):
-#     def __init__(self, mesh_folder, feat=16):
-#         super(LeNet, self).__init__()
-#         self.b = feat
-#         self.conv1 = MeshConv(1, self.b, mesh_file=os.path.join(mesh_folder, "icosphere_4.pkl"), stride=2)
-#         self.conv2 = MeshConv(self.b, 2*self.b, mesh_file=os.path.join(mesh_folder, "icosphere_3.pkl"), stride=2)
-#         self.conv3 = MeshConv(2*self.b, 3*self.b, mesh_file=os.path.join(mesh_folder, "icosphere_2.pkl"), stride=2)
-#         self.conv4 = MeshConv(3*self.b, 4*self.b, mesh_file=os.path.join(mesh_folder, "icosphere_1.pkl"), stride=2)
-#         self.csize = 4*self.b*self.conv4.nv_prev
-#         self.conv4_drop = nn.Dropout2d()
-#         self.fc1 = nn.Linear(self.csize, 512)
-#         self.fc2 = nn.Linear(512, 10)
-
-#     def forward(self, x):
-#         x = F.relu(self.conv1(x))
-#         x = F.relu(self.conv2(x))
-#         x = F.relu(self.conv3(x))
-#         x = F.relu(self.conv4_drop(self.conv4(x).unsqueeze(-1)))
-#         x = x.view(-1, self.csize)
-#         x = F.relu(self.fc1(x))
-#         x = F.dropout(x, training=self.training)
-#         x = self.fc2(x)
-#         return F.log_softmax(x, dim=1)
-
-
 class DownSamp(nn.Module):
     def __init__(self, nv_prev):
         super().__init__()
@@ -37,7 +12,6 @@ class DownSamp(nn.Module):
 
     def forward(self, x):
         return x[..., :self.nv_prev]
-
 
 class ResBlock(nn.Module):
     def __init__(self, in_chan, neck_chan, out_chan, level, coarsen, mesh_folder):
@@ -57,9 +31,6 @@ class ResBlock(nn.Module):
         self.diff_chan = (in_chan != out_chan)
 
         if coarsen:
-            # self.seq1 = nn.Sequential(self.conv1, self.down, self.bn1, self.relu, 
-            #                           self.conv2, self.bn2, self.relu, 
-            #                           self.conv3, self.bn3)
             self.seq1 = nn.Sequential(self.down, self.conv1, self.bn1, self.relu, 
                                       self.conv2, self.bn2, self.relu, 
                                       self.conv3, self.bn3)
@@ -86,8 +57,7 @@ class ResBlock(nn.Module):
         out = self.relu(out)
         return out
 
-
-class LeNet(nn.Module):
+class Model(nn.Module):
     def __init__(self, mesh_folder, feat=16, nclasses=10):
         super().__init__()
         mf = os.path.join(mesh_folder, "icosphere_4.pkl")
