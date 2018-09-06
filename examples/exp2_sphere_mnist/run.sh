@@ -1,7 +1,7 @@
 #!/bin/bash
 source activate
-MESHFILES=../../archive/old_mesh_files
-DATAFILE=mnist_ico4_old_eq.gzip
+MESHFILES=../../archive/mesh_files
+DATAFILE=mnist_ico4_old.zip
 
 # assert mesh files exist
 if [ ! -d $MESHFILES ]; then
@@ -16,4 +16,4 @@ if [ ! -f $DATAFILE ]; then
 fi
 
 # train
-python train.py --mesh_folder $MESHFILES --datafile $DATAFILE --log_dir log_res_rot_adam_deep_ft8 --optim adam --lr 3e-3 --epochs 100 --feat 8 #--dropout #--decay
+python train.py --mesh_folder $MESHFILES --datafile $DATAFILE --log_dir log_res_rot_adam_ft16_b16_decay --optim adam --lr 1e-2 --epochs 100 --feat 16 --decay --batch-size 16 #--dropout 
