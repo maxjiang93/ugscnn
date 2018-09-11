@@ -25,6 +25,7 @@ class _MeshConv(nn.Module):
         # load mesh file
         pkl = pickle.load(open(mesh_file, "rb"))
         self.pkl = pkl
+        self.nv = self.pkl['V'].shape[0]
         G = sparse2tensor(pkl['G'])  # gradient matrix V->F, 3#F x #V
         NS = torch.tensor(pkl['NS'], dtype=torch.float32)  # north-south vector field, #F x 3
         EW = torch.tensor(pkl['EW'], dtype=torch.float32)  # east-west vector field, #F x 3
@@ -79,7 +80,6 @@ class MeshConv_transpose(_MeshConv):
         super(MeshConv_transpose, self).__init__(in_channels, out_channels, mesh_file, stride, bias)
         pkl = self.pkl
         self.nv_prev = self.pkl['nv_prev']
-        self.nv = self.pkl['V'].shape[0]
         self.nv_pad = self.nv - self.nv_prev
         L = sparse2tensor(pkl['L'].tocoo()) # laplacian matrix V->V
         F2V = sparse2tensor(pkl['F2V'].tocoo()) # F->V, #V x #F
