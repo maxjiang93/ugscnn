@@ -1,14 +1,14 @@
 import math
 import argparse
-import sys
+import sys, os; sys.path.append("../../meshcnn")
 import numpy as np
 import pickle, gzip
+import logging
+import shutil
 
-import sys
-sys.path.append("../../meshcnn")
 from utils import sparse2tensor, spmatmul, MNIST_S2_Loader
 from ops import MeshConv
-from model import LeNet
+from model import Model
 
 import torch
 import torch.nn.functional as F
@@ -17,22 +17,27 @@ from torch.utils.data import Dataset, DataLoader
 from torch import nn
 
 
-def train(args, model, device, train_loader, optimizer, epoch):
+def train(args, model, device, train_loader, optimizer, epoch, logger):
     model.train()
+    train_loss = 0
+    correct = 0
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
+        pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
+        correct += pred.eq(target.view_as(pred)).sum().item()
         loss = F.nll_loss(output, target)
+        train_loss += loss.item()
         loss.backward()
         optimizer.step()
-        if batch_idx % args.log_interval == 0:
-            sys.stdout.write('Train Epoch: {} [{}/{} ({:.0f}%)] Loss: {:.6f} \r'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item()))
-            sys.stdout.flush()
+    
+    train_loss /= len(train_loader.dataset)
+    logger.info('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%) \r'.format(
+                train_loss, correct, len(train_loader.dataset),
+                100. * correct / len(train_loader.dataset)))
 
-def test(args, model, device, test_loader):
+def test(args, model, device, test_loader, logger):
     model.eval()
     test_loss = 0
     correct = 0
@@ -45,9 +50,9 @@ def test(args, model, device, test_loader):
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%) \r'.format(
-        test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+    logger.info('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%) \r'.format(
+                test_loss, correct, len(test_loader.dataset),
+                100. * correct / len(test_loader.dataset)))
     
 def main():
     # Training settings
@@ -72,8 +77,31 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--datafile', type=str, default="mnist_ico4.gzip",
                         help='data file containing preprocessed spherical mnist data')
+    parser.add_argument('--log_dir', type=str, default="log",
+                        help='log directory for run')
+    parser.add_argument('--decay', action="store_true", help="switch to decay learning rate")
+    parser.add_argument('--optim', type=str, default="adam", choices=["adam", "sgd"])
+    # parser.add_argument('--dropout', action="store_true")
+    parser.add_argument('--feat', type=int, default=16, help="number of base features")
 
     args = parser.parse_args()
+
+    if not os.path.exists(args.log_dir):
+        os.mkdir(args.log_dir)
+    shutil.copy2(__file__, os.path.join(args.log_dir, "script.py"))
+    shutil.copy2("model.py", os.path.join(args.log_dir, "model.py"))
+    shutil.copy2("run.sh", os.path.join(args.log_dir, "run.sh"))
+
+    logger = logging.getLogger("train")
+    logger.setLevel(logging.DEBUG)
+    logger.handlers = []
+    ch = logging.StreamHandler()
+    logger.addHandler(ch)
+    fh = logging.FileHandler(os.path.join(args.log_dir, "log.txt"))
+    logger.addHandler(fh)
+
+    logger.info("%s", repr(args))
+
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
     torch.manual_seed(args.seed)
@@ -86,19 +114,26 @@ def main():
     train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = DataLoader(testset, batch_size=args.batch_size, shuffle=True, **kwargs)
     
-    model = LeNet(mesh_folder=args.mesh_folder)
+    model = Model(mesh_folder=args.mesh_folder, feat=args.feat)
     model = nn.DataParallel(model)
     model.to(device)
 
-    def count_parameters(model):
-        return sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print("Number of trainable model parameters: {0}".format(count_parameters(model)))
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
-    # optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    logger.info("{} paramerters in total".format(sum(x.numel() for x in model.parameters())))
+
+    if args.optim == "sgd":
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
+    else:
+        optimizer = optim.Adam(model.parameters(), lr=args.lr)
+
+    if args.decay:
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
 
     for epoch in range(1, args.epochs + 1):
-        train(args, model, device, train_loader, optimizer, epoch)
-        test(args, model, device, test_loader)
+        if args.decay:
+            scheduler.step()
+        logger.info("[Epoch {}]".format(epoch))
+        train(args, model, device, train_loader, optimizer, epoch, logger)
+        test(args, model, device, test_loader, logger)
 
         
 if __name__ == "__main__":

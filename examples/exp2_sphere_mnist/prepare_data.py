@@ -221,6 +221,11 @@ def main():
                         help="path to mesh file",
                         type=str,
                         default="mesh_files/icosphere_3.pkl")
+    parser.add_argument("--direction", 
+                        help="projection direction [NP/EQ] : North Pole / Equator",
+                        type=str,
+                        choices=["NP", "EQ"],
+                        default="NP")
     
     args = parser.parse_args()
 
@@ -279,6 +284,13 @@ def main():
     V = p['V']
     F = p['F']
     
+    # whether to project to NP (north pole) or EQ (equator)
+    cos45 = np.cos(np.pi/2)
+    sin45 = np.sin(np.pi/2)
+    if args.direction == "EQ":
+        x_rot_mat = np.array([[1, 0, 0],[0, cos45, -sin45],[0,sin45, cos45]])
+        V = V.dot(x_rot_mat)
+
     x_train_s2 = []
     print("Converting training set...")
     for i in tqdm(range(x_train.shape[0])):

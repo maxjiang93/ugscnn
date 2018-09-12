@@ -2,7 +2,7 @@ import math
 import argparse
 import sys
 sys.path.append("../../meshcnn")
-import numpy as np
+import numpy as np; np.set_printoptions(precision=4)
 import pickle, gzip
 import os
 import shutil
@@ -10,7 +10,7 @@ import logging
 from collections import OrderedDict
 
 from ops import MeshConv
-from loader import ClimateSegLoader
+from loader import S2D3DSegLoader
 from model import UNet
 
 import torch
@@ -20,6 +20,20 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import average_precision_score
 from sklearn.preprocessing import label_binarize
+
+classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+class_names = ["unknown", "beam", "board", "bookcase", "ceiling", "chair", "clutter", "column", 
+               "door", "floor", "sofa", "table", "wall", "window", "invalid"]
+drop = [0, 6, 14]
+keep = np.setdiff1d(classes, drop)
+label_ratio = [0.04233976974675504, 0.014504436907968913, 0.017173225930738712, 
+               0.048004778186652164, 0.17384037404789865, 0.028626771620973622, 
+               0.087541966989014, 0.019508096683310605, 0.08321331842901526, 
+               0.17002664771895903, 0.002515611224467519, 0.020731298851232174, 
+               0.2625963729249342, 0.016994731594287146, 0.012382599143792165]
+label_weight = 1/np.array(label_ratio)/np.sum((1/np.array(label_ratio))[keep])
+label_weight[drop] = 0
+label_weight = label_weight.astype(np.float32)
 
 
 def save_checkpoint(state, is_best, epoch, output_folder, filename, logger):
@@ -31,31 +45,34 @@ def save_checkpoint(state, is_best, epoch, output_folder, filename, logger):
         shutil.copyfile(output_folder + filename + '_%03d' % epoch + '.pth.tar',
                         output_folder + filename + '_best.pth.tar')
 
-def iou_score(pred_cls, true_cls, nclass=3):
+def iou_score(pred_cls, true_cls, nclass=15, drop=drop):
     """
     compute the intersection-over-union score
     both inputs should be categorical (as opposed to one-hot)
     """
     iou = []
     for i in range(nclass):
-        # intersect = ((pred_cls == i) + (true_cls == i)).eq(2).item()
-        # union = ((pred_cls == i) + (true_cls == i)).ge(1).item()
-        intersect = ((pred_cls == i) + (true_cls == i)).eq(2).sum().item()
-        union = ((pred_cls == i) + (true_cls == i)).ge(1).sum().item()
-        iou_ = intersect / union
-        iou.append(iou_)
+        if i not in drop:
+            intersect = ((pred_cls == i) + (true_cls == i)).eq(2).sum().item()
+            union = ((pred_cls == i) + (true_cls == i)).ge(1).sum().item()
+            iou_ = intersect / union
+            iou.append(iou_)
     return np.array(iou)
 
-def average_precision(score_cls, true_cls, nclass=3):
+def average_precision(score_cls, true_cls, nclass=15, drop=drop):
+    true_cls_np = true_cls.cpu().numpy().reshape(-1)
+    ch_keep_id = np.isin(true_cls_np, drop, invert=True)
+    present_cls = np.setdiff1d(classes, drop)
     score = score_cls.cpu().numpy()
-    true = label_binarize(true_cls.cpu().numpy().reshape(-1), classes=[0, 1, 2])
-    score = np.swapaxes(score, 1, 2).reshape(-1, nclass)
-    return average_precision_score(true, score)
+    score = np.swapaxes(score, 1, 2).reshape(-1, nclass)[ch_keep_id]
+    score = score[:, present_cls]
+    true = label_binarize(true_cls_np[ch_keep_id], classes=present_cls)
+    ap = np.nan_to_num(average_precision_score(true, score, average=None))
+    per_cls_counts = np.sum(true, axis=0)
+    return ap, per_cls_counts
 
-def train(args, model, train_loader, optimizer, epoch, device, logger):
-    # w = torch.tensor([0.001020786726132422, 0.9528737404907279, 0.04610547278313972]).to(device)
-    # ratios: [0.97663559 0.00104578 0.02231863]
-    w = torch.tensor([1.0,1.0,1.0]).to(device)
+def train(args, model, train_loader, optimizer, epoch, device, logger, keep_id=None):
+    w = torch.tensor(label_weight).to(device)
     model.train()
     tot_loss = 0
     count = 0
@@ -63,6 +80,10 @@ def train(args, model, train_loader, optimizer, epoch, device, logger):
         data, target = data.cuda(), target.cuda()
         optimizer.zero_grad()
         output = model(data)
+        if keep_id is not None:
+            output = output[:, :, keep_id]
+            target = target[:, keep_id]
+
         loss = F.cross_entropy(output, target, weight=w)
         loss.backward()
         optimizer.step()
@@ -75,38 +96,46 @@ def train(args, model, train_loader, optimizer, epoch, device, logger):
     tot_loss /= count
     return tot_loss
 
-def test(args, model, test_loader, device, logger):
-    # w = torch.tensor([0.001020786726132422, 0.9528737404907279, 0.04610547278313972]).to(device)
-    w = torch.tensor([1.0,1.0,1.0]).to(device)
+def test(args, model, test_loader, epoch, device, logger, keep_id=None):
+    w = torch.tensor(label_weight).to(device)
     model.eval()
     test_loss = 0
-    ious = np.zeros(3)
+    ious = np.zeros(len(classes)-len(drop))
     aps = 0
     count = 0
+    per_cls_counts = np.zeros(len(classes)-len(drop))
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.cuda(), target.cuda()
             output = model(data)
             n_data = data.size()[0]
+
+            if keep_id is not None:
+                output = output[:, :, keep_id]
+                target = target[:, keep_id]
+
             test_loss += F.cross_entropy(output, target, weight=w).item() # sum up batch loss
             pred = output.max(dim=1, keepdim=False)[1] # get the index of the max log-probability
-            iou = iou_score(pred, target, nclass=3)
-            ap = average_precision(output, target)
+            iou = iou_score(pred, target)
+            ap, pcc = average_precision(output, target)
             ious += iou * n_data
-            aps += ap * n_data
+            aps += ap * pcc
             count += n_data
+            per_cls_counts += pcc
     ious /= count
-    aps /= count
+    aps /= per_cls_counts
     test_loss /= count
 
+
     test_loss /= len(test_loader.dataset)
-    logger.info('Test set: Avg Precision: {:.4f}; MIoU: {:.4f}; IoU: {:.4f}, {:.4f}, {:.4f}; Avg loss: {:.4f}'.format(
-        aps, np.mean(ious), ious[0], ious[1], ious[2], test_loss))
-    return aps
+    logger.info('[Epoch {} Test set]: Avg Precision: {:.4f}; MIoU: {:.4f}; Avg loss: {:.4f}'.format(
+        epoch, np.mean(aps), np.mean(ious), test_loss))
+    logger.info('Avg. Precision: {}'.format(aps))
+    return np.mean(aps)
     
 def main():
     # Training settings
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+    parser = argparse.ArgumentParser(description='Segmentation')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=64, metavar='N',
@@ -127,12 +156,15 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--max_level', type=int, default=7, help='max mesh level')
     parser.add_argument('--min_level', type=int, default=0, help='min mesh level')
-    parser.add_argument('--feat', type=int, default=16, help='filter dimensions')
+    parser.add_argument('--feat', type=int, default=4, help='filter dimensions')
     parser.add_argument('--log_dir', type=str, default="log",
                         help='log directory for run')
     parser.add_argument('--decay', action="store_true", help="switch to decay learning rate")
     parser.add_argument('--optim', type=str, default="adam", choices=["adam", "sgd"])
     parser.add_argument('--resume', type=str, default=None, help="path to checkpoint if resume is needed")
+    parser.add_argument('--fold', type=int, choices=[1, 2, 3], required=True, help="choice among 3 fold for cross-validation")
+    parser.add_argument('--blackout_id', type=str, default="", help="path to file storing blackout_id")
+    parser.add_argument('--in_ch', type=str, default="rgbd", choices=["rgb", "rgbd"], help="input channels")
 
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -156,23 +188,30 @@ def main():
     logger.info("%s", repr(args))
 
     torch.manual_seed(args.seed)
+
     if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
 
-    trainset = ClimateSegLoader(args.data_folder, "train")
-    valset = ClimateSegLoader(args.data_folder, "val")
+    trainset = S2D3DSegLoader(args.data_folder, "train", fold=args.fold, in_ch=len(args.in_ch))
+    valset = S2D3DSegLoader(args.data_folder, "test", fold=args.fold, in_ch=len(args.in_ch))
     train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, drop_last=True)
     val_loader = DataLoader(valset, batch_size=args.batch_size, shuffle=True, drop_last=False)
     
-    model = UNet(mesh_folder=args.mesh_folder, in_ch=16, out_ch=3, 
+    model = UNet(mesh_folder=args.mesh_folder, in_ch=len(args.in_ch), out_ch=len(classes), 
         max_level=args.max_level, min_level=args.min_level, fdim=args.feat)
     model = nn.DataParallel(model)
     model.to(device)
 
+    if args.blackout_id:
+        blackout_id = np.load(args.blackout_id)
+        keep_id = np.argwhere(np.isin(np.arange(model.module.nv_max), blackout_id, invert=True))
+    else:
+        keep_id = None
+
     if args.resume:
         resume_dict = torch.load(args.resume)
 
-        def load_my_state_dict(self, state_dict, exclude='out_layer'):
+        def load_my_state_dict(self, state_dict, exclude='none'):
             from torch.nn.parameter import Parameter
      
             own_state = self.state_dict()
@@ -196,13 +235,13 @@ def main():
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     if args.decay:
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.4)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.9)
 
     best_ap = 0
     checkpoint_path = os.path.join(args.log_dir, 'checkpoint_latest.pth.tar')
     for epoch in range(1, args.epochs + 1):
-        loss = train(args, model, train_loader, optimizer, epoch, device, logger)
-        ap = test(args, model, val_loader, device, logger)
+        loss = train(args, model, train_loader, optimizer, epoch, device, logger, keep_id)
+        ap = test(args, model, val_loader, epoch, device, logger, keep_id)
         if ap > best_ap:
             best_ap = ap
             is_best = True

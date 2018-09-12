@@ -48,6 +48,7 @@ class UNet(nn.Module):
         self.up = []
         self.in_conv = MeshConv(in_ch, fdim, self.__meshfile(max_level), stride=1)
         self.out_conv = MeshConv(fdim, out_ch, self.__meshfile(max_level), stride=1)
+        self.nv_max = self.in_conv.nv
         # Downward path
         for i in range(self.levels-1):
             self.down.append(Down(fdim*(2**i), fdim*(2**(i+1)), max_level-i-1, mesh_folder))
