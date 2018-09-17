@@ -8,10 +8,11 @@ import os
 import shutil
 import logging
 from collections import OrderedDict
+from tabulate import tabulate
 
 from ops import MeshConv
 from loader import S2D3DSegLoader
-from model import UNet
+from model import UNet, UNet_intp
 
 import torch
 import torch.nn.functional as F
@@ -24,14 +25,15 @@ from sklearn.preprocessing import label_binarize
 classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 class_names = ["unknown", "beam", "board", "bookcase", "ceiling", "chair", "clutter", "column", 
                "door", "floor", "sofa", "table", "wall", "window", "invalid"]
-drop = [0, 6, 14]
+drop = [0, 14]
 keep = np.setdiff1d(classes, drop)
 label_ratio = [0.04233976974675504, 0.014504436907968913, 0.017173225930738712, 
                0.048004778186652164, 0.17384037404789865, 0.028626771620973622, 
                0.087541966989014, 0.019508096683310605, 0.08321331842901526, 
                0.17002664771895903, 0.002515611224467519, 0.020731298851232174, 
                0.2625963729249342, 0.016994731594287146, 0.012382599143792165]
-label_weight = 1/np.array(label_ratio)/np.sum((1/np.array(label_ratio))[keep])
+# label_weight = 1/np.array(label_ratio)/np.sum((1/np.array(label_ratio))[keep])
+label_weight = 1 / np.log(1.02 + np.array(label_ratio))
 label_weight[drop] = 0
 label_weight = label_weight.astype(np.float32)
 
@@ -50,26 +52,38 @@ def iou_score(pred_cls, true_cls, nclass=15, drop=drop):
     compute the intersection-over-union score
     both inputs should be categorical (as opposed to one-hot)
     """
-    iou = []
+    intersect_ = []
+    union_ = []
     for i in range(nclass):
         if i not in drop:
             intersect = ((pred_cls == i) + (true_cls == i)).eq(2).sum().item()
             union = ((pred_cls == i) + (true_cls == i)).ge(1).sum().item()
-            iou_ = intersect / union
-            iou.append(iou_)
-    return np.array(iou)
+            intersect_.append(intersect)
+            union_.append(union)
+    return np.array(intersect_), np.array(union_)
 
-def average_precision(score_cls, true_cls, nclass=15, drop=drop):
-    true_cls_np = true_cls.cpu().numpy().reshape(-1)
-    ch_keep_id = np.isin(true_cls_np, drop, invert=True)
-    present_cls = np.setdiff1d(classes, drop)
-    score = score_cls.cpu().numpy()
-    score = np.swapaxes(score, 1, 2).reshape(-1, nclass)[ch_keep_id]
-    score = score[:, present_cls]
-    true = label_binarize(true_cls_np[ch_keep_id], classes=present_cls)
-    ap = np.nan_to_num(average_precision_score(true, score, average=None))
-    per_cls_counts = np.sum(true, axis=0)
-    return ap, per_cls_counts
+def accuracy(pred_cls, true_cls, nclass=15, drop=drop):
+    positive = torch.histc(true_cls.cpu().float(), bins=nclass, min=0, max=nclass, out=None)
+    per_cls_counts = []
+    tpos = []
+    for i in range(nclass):
+        if i not in drop:
+            true_positive = ((pred_cls == i) + (true_cls == i)).eq(2).sum().item()
+            tpos.append(true_positive)
+            per_cls_counts.append(positive[i])
+    return np.array(tpos), np.array(per_cls_counts)
+
+# def average_precision(score_cls, true_cls, nclass=15, drop=drop):
+#     true_cls_np = true_cls.cpu().numpy().reshape(-1)
+#     ch_keep_id = np.isin(true_cls_np, drop, invert=True)
+#     present_cls = np.setdiff1d(classes, drop)
+#     score = score_cls.cpu().numpy()
+#     score = np.swapaxes(score, 1, 2).reshape(-1, nclass)[ch_keep_id]
+#     score = score[:, present_cls]
+#     true = label_binarize(true_cls_np[ch_keep_id], classes=present_cls)
+#     ap = np.nan_to_num(average_precision_score(true, score, average=None))
+#     per_cls_counts = np.sum(true, axis=0)
+#     return ap, per_cls_counts
 
 def train(args, model, train_loader, optimizer, epoch, device, logger, keep_id=None):
     w = torch.tensor(label_weight).to(device)
@@ -100,10 +114,11 @@ def test(args, model, test_loader, epoch, device, logger, keep_id=None):
     w = torch.tensor(label_weight).to(device)
     model.eval()
     test_loss = 0
-    ious = np.zeros(len(classes)-len(drop))
-    aps = 0
-    count = 0
+    ints_ = np.zeros(len(classes)-len(drop))
+    unis_ = np.zeros(len(classes)-len(drop))
     per_cls_counts = np.zeros(len(classes)-len(drop))
+    accs = np.zeros(len(classes)-len(drop))
+    count = 0
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.cuda(), target.cuda()
@@ -116,22 +131,23 @@ def test(args, model, test_loader, epoch, device, logger, keep_id=None):
 
             test_loss += F.cross_entropy(output, target, weight=w).item() # sum up batch loss
             pred = output.max(dim=1, keepdim=False)[1] # get the index of the max log-probability
-            iou = iou_score(pred, target)
-            ap, pcc = average_precision(output, target)
-            ious += iou * n_data
-            aps += ap * pcc
-            count += n_data
+            int_, uni_ = iou_score(pred, target)
+            tpos, pcc = accuracy(pred, target)
+            ints_ += int_
+            unis_ += uni_
+            accs += tpos
             per_cls_counts += pcc
-    ious /= count
-    aps /= per_cls_counts
+            count += n_data
+    ious = ints_ / unis_
+    accs /= per_cls_counts
     test_loss /= count
+    print(per_cls_counts)
 
-
-    test_loss /= len(test_loader.dataset)
-    logger.info('[Epoch {} Test set]: Avg Precision: {:.4f}; MIoU: {:.4f}; Avg loss: {:.4f}'.format(
-        epoch, np.mean(aps), np.mean(ious), test_loss))
-    logger.info('Avg. Precision: {}'.format(aps))
-    return np.mean(aps)
+    logger.info('[Epoch {} {} stats]: MIoU: {:.4f}; Mean Accuracy: {:.4f}; Avg loss: {:.4f}'.format(
+        epoch, test_loader.dataset.partition, np.mean(ious), np.mean(accs), test_loss))
+    # tabulate mean iou 
+    logger.info(tabulate(dict(zip(class_names[1:-1], [[iou] for iou in ious])), headers="keys"))
+    return np.mean(np.mean(ious))
     
 def main():
     # Training settings
@@ -165,6 +181,7 @@ def main():
     parser.add_argument('--fold', type=int, choices=[1, 2, 3], required=True, help="choice among 3 fold for cross-validation")
     parser.add_argument('--blackout_id', type=str, default="", help="path to file storing blackout_id")
     parser.add_argument('--in_ch', type=str, default="rgbd", choices=["rgb", "rgbd"], help="input channels")
+    parser.add_argument('--train_stats_freq', default=0, type=int, help="frequency for printing training set stats. 0 for never.")
 
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -192,13 +209,13 @@ def main():
     if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
 
-    trainset = S2D3DSegLoader(args.data_folder, "train", fold=args.fold, in_ch=len(args.in_ch))
-    valset = S2D3DSegLoader(args.data_folder, "test", fold=args.fold, in_ch=len(args.in_ch))
+    trainset = S2D3DSegLoader(args.data_folder, "train", fold=args.fold, sp_level=args.max_level, in_ch=len(args.in_ch))
+    valset = S2D3DSegLoader(args.data_folder, "test", fold=args.fold, sp_level=args.max_level, in_ch=len(args.in_ch))
     train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, drop_last=True)
     val_loader = DataLoader(valset, batch_size=args.batch_size, shuffle=True, drop_last=False)
     
-    model = UNet(mesh_folder=args.mesh_folder, in_ch=len(args.in_ch), out_ch=len(classes), 
-        max_level=args.max_level, min_level=args.min_level, fdim=args.feat)
+    model = UNet_intp(mesh_folder=args.mesh_folder, in_ch=len(args.in_ch), out_ch=len(classes), 
+                      max_level=args.max_level, min_level=args.min_level, fdim=args.feat)
     model = nn.DataParallel(model)
     model.to(device)
 
@@ -208,8 +225,12 @@ def main():
     else:
         keep_id = None
 
+    start_ep = 0
+    best_miou = 0
     if args.resume:
         resume_dict = torch.load(args.resume)
+        start_ep = resume_dict['epoch']
+        best_miou = resume_dict['best_miou']
 
         def load_my_state_dict(self, state_dict, exclude='none'):
             from torch.nn.parameter import Parameter
@@ -225,7 +246,7 @@ def main():
                     param = param.data
                 own_state[name].copy_(param)
 
-        load_my_state_dict(model, resume_dict)  
+        load_my_state_dict(model, resume_dict['state_dict'])  
 
     logger.info("{} paramerters in total".format(sum(x.numel() for x in model.parameters())))
 
@@ -237,13 +258,18 @@ def main():
     if args.decay:
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.9)
 
-    best_ap = 0
     checkpoint_path = os.path.join(args.log_dir, 'checkpoint_latest.pth.tar')
-    for epoch in range(1, args.epochs + 1):
+
+    # training loop
+    for epoch in range(start_ep + 1, args.epochs + 1):
+        if args.decay:
+            scheduler.step(epoch)
         loss = train(args, model, train_loader, optimizer, epoch, device, logger, keep_id)
-        ap = test(args, model, val_loader, epoch, device, logger, keep_id)
-        if ap > best_ap:
-            best_ap = ap
+        miou = test(args, model, val_loader, epoch, device, logger, keep_id)
+        if args.train_stats_freq >0 and (epoch % args.train_stats_freq == 0):
+            _ = test(args, model, train_loader, epoch, device, logger, keep_id)
+        if miou > best_miou:
+            best_miou = miou
             is_best = True
         else:
             is_best = False
@@ -254,7 +280,7 @@ def main():
         save_checkpoint({
         'epoch': epoch,
         'state_dict': state_dict_no_sparse,
-        'best_ap': best_ap,
+        'best_miou': best_miou,
         'optimizer': optimizer.state_dict(),
         }, is_best, epoch, checkpoint_path, "_UNet", logger)
 

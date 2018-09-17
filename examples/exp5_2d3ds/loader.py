@@ -4,6 +4,8 @@ import os
 import random
 from torch.utils.data import Dataset, DataLoader
 
+# sphere mesh size at different levels
+nv_sphere = [12, 42, 162, 642, 2562, 10242, 40962, 163842]
 # precomputed mean and std of the dataset
 precomp_mean = [0.4974898, 0.47918808, 0.42809588, 1.0961773]
 precomp_std = [0.23762763, 0.23354423, 0.23272438, 0.75536704]
@@ -11,7 +13,7 @@ precomp_std = [0.23762763, 0.23354423, 0.23272438, 0.75536704]
 class S2D3DSegLoader(Dataset):
     """Data loader for Climate Segmentation dataset."""
 
-    def __init__(self, data_dir, partition, fold, in_ch=4, normalize_mean=precomp_mean, normalize_std=precomp_std):
+    def __init__(self, data_dir, partition, fold, sp_level, in_ch=4, normalize_mean=precomp_mean, normalize_std=precomp_std):
         """
         Args:
             data_dir: path to data directory
@@ -22,6 +24,8 @@ class S2D3DSegLoader(Dataset):
         assert(partition in ["train", "test"])
         assert(fold in [1, 2, 3])
         self.in_ch = in_ch
+        self.nv = nv_sphere[sp_level]
+        self.partition = partition
         if fold == 1:
             train_areas = ['1', '2', '3', '4', '6']
             test_areas = ['5a', '5b']
@@ -52,6 +56,6 @@ class S2D3DSegLoader(Dataset):
     def __getitem__(self, idx):
         # load files
         fname = self.flist[idx]
-        data = (np.load(fname)["data"].T[:self.in_ch] - self.mean) / self.std
-        labels = np.load(fname)["labels"].T.astype(np.int)
+        data = (np.load(fname)["data"].T[:self.in_ch, :self.nv] - self.mean) / self.std
+        labels = np.load(fname)["labels"].T[:self.nv].astype(np.int)
         return data, labels

@@ -15,13 +15,12 @@ def export_spheres(int_list, dest_folder):
 
 
 class icosphere(object):
-    def __init__(self, level=0):
+    def __init__(self, level=0, upward=False):
         self.level = level
-        self.vertices, self.faces = self.icosahedron()
+        self.vertices, self.faces = self.icosahedron(upward=upward)
+        self.intp = None
         self.v0, self.f0 = self.vertices.copy(), self.faces.copy()
-        self.nv_prev = self.vertices.shape[0]
         for l in range(self.level):
-            self.nv_prev = self.vertices.shape[0]
             self.subdivide()
             self.normalize()
         self.lat, self.long = self.xyz2latlong()
@@ -44,7 +43,8 @@ class icosphere(object):
                      "EW": self.EW,
                      "F2V": self.F2V,
                      "M": self.M,
-                     "Seq": self.Seq}
+                     "Seq": self.Seq,
+                     "Intp": self.Intp}
 
     def subdivide(self):
         """
@@ -59,6 +59,7 @@ class icosphere(object):
         # the (c, 3, 3) float set of points in the triangles
         triangles = vertices[faces]
         # the 3 midpoints of each triangle edge vstacked to a (3*c, 3) float
+        src_idx = np.vstack([faces[:, g] for g in [[0, 1], [1, 2], [2, 0]]])
         mid = np.vstack([triangles[:, g, :].mean(axis=1) for g in [[0, 1],
                                                                    [1, 2],
                                                                    [2, 0]]])
@@ -68,6 +69,7 @@ class icosphere(object):
         unique, inverse = unique_rows(mid)
 
         mid = mid[unique]
+        src_idx = src_idx[unique]
         mid_idx = inverse[mid_idx] + len(vertices)
         # the new faces, with correct winding
         f = np.column_stack([faces[:, 0], mid_idx[:, 0], mid_idx[:, 2],
@@ -80,9 +82,14 @@ class icosphere(object):
         new_faces[face_index] = f[:len(face_index)]
 
         new_vertices = np.vstack((vertices, mid))
+        # source ids
+        nv = vertices.shape[0]
+        identity_map = np.stack((np.arange(nv), np.arange(nv)), axis=1)
+        src_id = np.concatenate((identity_map, src_idx), axis=0)
 
         self.vertices = new_vertices
         self.faces = new_faces
+        self.intp = src_id
     
     def normalize(self, radius=1):
         '''
@@ -242,6 +249,16 @@ class icosphere(object):
         tot_area = adj.dot(A)
         norm_area = A.ravel().repeat(3)/np.squeeze(tot_area[i])
         F2V = sparse.csc_matrix((norm_area, (i, j)), shape=(self.nv, self.nf))
+        # Compute interpolation matrix
+        if self.level > 0:
+            intp = self.intp[self.nv_prev:]
+            i = np.concatenate((np.arange(self.nv), np.arange(self.nv_prev, self.nv)))
+            j = np.concatenate((np.arange(self.nv_prev), intp[:, 0], intp[:, 1]))
+            ratio = np.concatenate((np.ones(self.nv_prev), 0.5*np.ones(2*intp.shape[0])))
+            intp = sparse.csc_matrix((ratio, (i, j)), shape=(self.nv, self.nv_prev))
+        else:
+            intp = sparse.csc_matrix(np.eye(self.nv))
+        
 
         # Compute vertex mean matrix
         self.G = G  # gradient matrix
@@ -252,13 +269,16 @@ class icosphere(object):
         self.F2V = F2V  # map face quantities to vertices
         self.M = M # mass matrix (area of voronoi cell around node. for integration)
         self.Seq = self._rotseq(self.vertices)
+        self.Intp = intp
 
     def export_mesh_info(self, filename):
         """Write mesh info as pickle file"""
         with open(filename, "wb") as f:
             pickle.dump(self.info, f)
 
-# s = icosphere(0)
+# from pdb import set_trace; set_trace()
+# s = icosphere(2)
+# a = 0
 # import pyigl as igl
 # from iglhelpers import p2e
 # # visualize
