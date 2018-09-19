@@ -43,7 +43,7 @@ def interp_r2tos2(sig_r2, V, method="linear", dtype=np.float32):
     dlat, dlong = np.pi/(nlat-1), 2*np.pi/nlong
     lat = np.linspace(-np.pi/2, np.pi/2, nlat)
     long = np.linspace(-np.pi, np.pi, nlong+1)
-    sig_r2 = np.concatenate((sig_r2, sig_r2[:, 0:1, :]), axis=1)
+    sig_r2 = np.concatenate((sig_r2, sig_r2[:, 0:1]), axis=1)
     intp = RegularGridInterpolator((lat, long), sig_r2, method=method)
     s2 = np.array([ele, azi]).T
     sig_s2 = intp(s2).astype(dtype)
