@@ -9,6 +9,7 @@ from joblib import Parallel, delayed
 import pickle
 from scipy import misc
 
+VFOV = 116 # vertical field-of-view
 
 def main():
     parser = argparse.ArgumentParser()
@@ -95,6 +96,12 @@ def main():
 
         rgbd = np.concatenate((rgb, np.expand_dims(depth, -1)), -1)
 
+        # pad north and south polar regions because of limited FOV
+        npad = (np.round(rgbd.shape[0] / VFOV * 180) - rgbd.shape[0]) / 2
+        npad = int(npad)
+        rgbd = np.pad(rgbd, ((npad, npad),(0,0),(0,0)), 'constant', constant_values=0)
+        sem = np.pad(sem, ((npad, npad),(0,0)), 'constant', constant_values=14)
+
         rgbd_intp = interp_r2tos2(rgbd, V, "linear", np.float32) # linearly interpolate RGBD values
         sem_intp = interp_r2tos2(sem, V, "nearest", np.uint8) # nearest neighbor intepolation for label
 
@@ -107,9 +114,7 @@ def main():
         rgbd_intp = np.moveaxis(rgbd_intp, -1, 0) # change into shape of (n_channel, height, width)
         np.savez(fname, data=rgbd_intp, labels=sem_intp)
 
-    from pdb import set_trace; set_trace()
-    worker_exec(fl[0])
-    # Parallel(n_jobs=args.jobs)(delayed(worker_exec)(fname) for fname in fl)
+    Parallel(n_jobs=args.jobs)(delayed(worker_exec)(fname) for fname in fl)
 
 if __name__ == '__main__':
     main()
