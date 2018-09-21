@@ -1,0 +1,15 @@
+<UNK>
+beam
+board
+bookcase
+ceiling
+chair
+clutter
+column
+door
+floor
+sofa
+table
+wall
+window
+<INV>
