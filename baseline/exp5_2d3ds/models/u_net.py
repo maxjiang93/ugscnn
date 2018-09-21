@@ -1,8 +1,10 @@
+import sys
+sys.path.append("..")
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ..utils import initialize_weights
+from utils import initialize_weights
 
 
 class _EncoderBlock(nn.Module):
@@ -43,25 +45,25 @@ class _DecoderBlock(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, in_channels=3, feat=64):
         super(UNet, self).__init__()
-        self.enc1 = _EncoderBlock(3, 64)
-        self.enc2 = _EncoderBlock(64, 128)
-        self.enc3 = _EncoderBlock(128, 256)
-        self.enc4 = _EncoderBlock(256, 512, dropout=True)
-        self.center = _DecoderBlock(512, 1024, 512)
-        self.dec4 = _DecoderBlock(1024, 512, 256)
-        self.dec3 = _DecoderBlock(512, 256, 128)
-        self.dec2 = _DecoderBlock(256, 128, 64)
+        self.enc1 = _EncoderBlock(in_channels, feat)
+        self.enc2 = _EncoderBlock(feat, feat*2)
+        self.enc3 = _EncoderBlock(feat*2, feat*4)
+        self.enc4 = _EncoderBlock(feat*4, feat*8, dropout=True)
+        self.center = _DecoderBlock(feat*8, feat*16, feat*8)
+        self.dec4 = _DecoderBlock(feat*16, feat*8, feat*4)
+        self.dec3 = _DecoderBlock(feat*8, feat*4, feat*2)
+        self.dec2 = _DecoderBlock(feat*4, feat*2, feat)
         self.dec1 = nn.Sequential(
-            nn.Conv2d(128, 64, kernel_size=3),
-            nn.BatchNorm2d(64),
+            nn.Conv2d(feat*2, feat, kernel_size=3),
+            nn.BatchNorm2d(feat),
             nn.ReLU(inplace=True),
-            nn.Conv2d(64, 64, kernel_size=3),
-            nn.BatchNorm2d(64),
+            nn.Conv2d(feat, feat, kernel_size=3),
+            nn.BatchNorm2d(feat),
             nn.ReLU(inplace=True),
         )
-        self.final = nn.Conv2d(64, num_classes, kernel_size=1)
+        self.final = nn.Conv2d(feat, num_classes, kernel_size=1)
         initialize_weights(self)
 
     def forward(self, x):

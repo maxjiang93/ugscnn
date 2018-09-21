@@ -56,7 +56,7 @@ class SemSegLoader(Dataset):
         self.std = np.array(precomp_std, dtype=np.float32)
 
     def __len__(self):
-        return len(self.flist)
+        return len(self.rgb_list)
 
     def __getitem__(self, idx):
         # load files
@@ -71,5 +71,9 @@ class SemSegLoader(Dataset):
 
         data = rgbd[..., :self.in_ch].astype(np.float32) # rgbd
         labels = out_feature_semantic_id.astype(int) # semantic labels
+        # swap axes to channels x H x W
+        data = np.swapaxes(np.swapaxes(data, -1, 0), 1, 2)
+        labels = labels
+
         return data, labels
 

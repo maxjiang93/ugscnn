@@ -1,7 +1,6 @@
 import math
 import argparse
 import sys
-sys.path.append("../../meshcnn")
 import numpy as np; np.set_printoptions(precision=4)
 import pickle, gzip
 import os
@@ -10,7 +9,6 @@ import logging
 from collections import OrderedDict
 from tabulate import tabulate
 
-from ops import MeshConv
 from loader import SemSegLoader
 from models import ResNetDUCHDC, FCN8s, UNet
 
@@ -209,7 +207,7 @@ def main():
     elif args.model == "FCN8s":
         model = FCN8s(len(classes))
     elif args.model == "UNet":
-        model = UNet(len(classes))
+        model = UNet(len(classes), len(args.in_ch))
 
     model = nn.DataParallel(model)
     model.to(device)
