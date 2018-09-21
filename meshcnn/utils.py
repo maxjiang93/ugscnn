@@ -32,14 +32,19 @@ def xyz2latlong(vertices):
     lat = np.arctan2(z, np.sqrt(xy2))
     return lat, long
 
-def interp_r2tos2(sig_r2, V, dtype=np.float32):
+def interp_r2tos2(sig_r2, V, method="linear", dtype=np.float32):
+    """
+    sig_r2: rectangular shape of (lat, long, n_channels)
+    V: array of spherical coordinates of shape (n_vertex, 3)
+    method: interpolation method. "linear" or "nearest"
+    """
     ele, azi = xyz2latlong(V)
     nlat, nlong = sig_r2.shape[0], sig_r2.shape[1]
     dlat, dlong = np.pi/(nlat-1), 2*np.pi/nlong
     lat = np.linspace(-np.pi/2, np.pi/2, nlat)
     long = np.linspace(-np.pi, np.pi, nlong+1)
-    sig_r2 = np.concatenate((sig_r2, sig_r2[:, 0:1, :]), axis=1)
-    intp = RegularGridInterpolator((lat, long), sig_r2)
+    sig_r2 = np.concatenate((sig_r2, sig_r2[:, 0:1]), axis=1)
+    intp = RegularGridInterpolator((lat, long), sig_r2, method=method)
     s2 = np.array([ele, azi]).T
     sig_s2 = intp(s2).astype(dtype)
     return sig_s2
