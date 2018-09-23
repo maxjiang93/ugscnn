@@ -8,9 +8,10 @@ from utils import get_upsampling_weight
 
 # This is implemented in full accordance with the original one (https://github.com/shelhamer/fcn.berkeleyvision.org)
 class FCN8s(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, pretrained=True):
         super(FCN8s, self).__init__()
-        vgg = models.vgg16()
+        vgg = models.vgg16(pretrained=pretrained)
+        features, classifier = list(vgg.features.children()), list(vgg.classifier.children())
         '''
         100 padding for 2 reasons:
             1) support very small input size

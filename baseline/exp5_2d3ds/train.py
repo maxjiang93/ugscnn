@@ -169,6 +169,7 @@ def main():
     parser.add_argument('--in_ch', type=str, default="rgbd", choices=["rgb", "rgbd"], help="input channels")
     parser.add_argument('--train_stats_freq', default=5, type=int, help="frequency for printing training set stats. 0 for never.")
     parser.add_argument('--model', type=str, choices=["ResNetDUCHDC", "FCN8s", "UNet"], required=True, help="model of choice")
+    parser.add_argument('--pretrained', action='store_true', help="whether to use pretrained model for ResNetDUCHDC and FCN8s")
 
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -203,9 +204,9 @@ def main():
 
     
     if args.model == "ResNetDUCHDC":
-        model = ResNetDUCHDC(len(classes))
+        model = ResNetDUCHDC(len(classes), pretrained=args.pretrained)
     elif args.model == "FCN8s":
-        model = FCN8s(len(classes))
+        model = FCN8s(len(classes), pretrained=args.pretrained)
     elif args.model == "UNet":
         model = UNet(len(classes), len(args.in_ch))
 
