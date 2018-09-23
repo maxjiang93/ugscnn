@@ -16,4 +16,4 @@ if [ ! -f $DATAFILE ]; then
 fi
 
 # train
-python train.py --mesh_folder $MESHFILES --datafile $DATAFILE --log_dir log_res_rot_adam_ft16_b16_decay --optim adam --lr 1e-2 --epochs 100 --feat 16 --decay --batch-size 16 #--dropout 
+python train.py --mesh_folder $MESHFILES --datafile $DATAFILE --log_dir log_res_rot_adam_ft16_b64_decay --optim adam --lr 1e-2 --epochs 100 --feat 16 --decay --batch-size 64 #--dropout 

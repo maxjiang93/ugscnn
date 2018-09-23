@@ -16,7 +16,7 @@ from collections import OrderedDict
 from dataset import ModelNet, CacheNPY, ToMesh, ProjectOnSphere
 
 
-def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation, 
+def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation, decay, data_dir,
          dataset, partition, batch_size, learning_rate, num_workers, epochs, pretrain, feat, rand_rot):
     arguments = copy.deepcopy(locals())
 
@@ -44,7 +44,8 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation,
     loader.exec_module(mod)
 
     num_classes = int(dataset[-2:])
-    model = mod.Model(num_classes, mesh_folder=sp_mesh_dir, feat=feat)
+    # model = mod.Model(num_classes, mesh_folder=sp_mesh_dir, feat=feat)
+    model = mod.Model_tiny(num_classes, mesh_folder=sp_mesh_dir, feat=feat)
     model = nn.DataParallel(model)
     model.cuda()
 
@@ -72,19 +73,19 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation,
 
     # Load the dataset
     # Increasing `repeat` will generate more cached files
-    transform = CacheNPY(prefix="sp{}_".format(sp_mesh_level), repeat=augmentation, transform=torchvision.transforms.Compose(
+    transform = CacheNPY(prefix="sp{}_".format(sp_mesh_level), transform=torchvision.transforms.Compose(
         [
             ToMesh(random_rotations=False, random_translation=0),
             ProjectOnSphere(meshfile=sp_mesh_file, dataset=dataset, normalize=True)
         ]
-    ), sp_mesh_dir=sp_mesh_dir, sp_mesh_level=sp_mesh_level, pick_randomly=rand_rot)
+    ), sp_mesh_dir=sp_mesh_dir, sp_mesh_level=sp_mesh_level)
 
-    transform_test = CacheNPY(prefix="sp{}_".format(sp_mesh_level), repeat=augmentation, transform=torchvision.transforms.Compose(
+    transform_test = CacheNPY(prefix="sp{}_".format(sp_mesh_level), transform=torchvision.transforms.Compose(
         [
             ToMesh(random_rotations=False, random_translation=0),
             ProjectOnSphere(meshfile=sp_mesh_file, dataset=dataset, normalize=True)
         ]
-    ), sp_mesh_dir=sp_mesh_dir, sp_mesh_level=sp_mesh_level, pick_randomly=False)
+    ), sp_mesh_dir=sp_mesh_dir, sp_mesh_level=sp_mesh_level)
 
     if dataset == 'modelnet10':
         def target_transform(x):
@@ -101,13 +102,16 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation,
         print('invalid dataset. must be modelnet10 or modelnet40')
         assert(0)
 
-    train_set = ModelNet("data", dataset=dataset, partition='train', transform=transform, target_transform=target_transform)
+    train_set = ModelNet(data_dir, dataset=dataset, partition='train', transform=transform, target_transform=target_transform)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
-    test_set = ModelNet("data", dataset=dataset, partition='test', transform=transform_test, target_transform=target_transform)
+    test_set = ModelNet(data_dir, dataset=dataset, partition='test', transform=transform_test, target_transform=target_transform)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=False)
 
     # optimizer = torch.optim.SGD(model.parameters(), lr=0, momentum=0.9)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    if decay:
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.7)
+
 
     def train_step(data, target):
         model.train()
@@ -150,7 +154,8 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation,
         # logger.info("learning rate = {} and batch size = {}".format(lr, train_loader.batch_size))
         # for p in optimizer.param_groups:
         #     p['lr'] = lr
-
+        if decay:
+            scheduler.step()
         # training
         total_loss = 0
         total_correct = 0
@@ -174,12 +179,14 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation,
         # test
         total_loss = 0
         total_correct = 0
+        count = 0
         for batch_idx, (data, target) in enumerate(test_loader):
             loss, correct = test_step(data, target)
             total_loss += loss
             total_correct += correct
+            count += 1
         logger.info("[Epoch {} Test] <LOSS>={:.2} <ACC>={:2}".format(
-            epoch, total_loss / (batch_idx + 1), total_correct / len(test_set)))
+            epoch, total_loss / (count+1), total_correct / len(test_set)))
 
         # remove sparse matrices since they cannot be stored
         state_dict_no_sparse = [it for it in model.state_dict().items() if it[1].type() != "torch.cuda.sparse.FloatTensor"]
@@ -206,7 +213,9 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--pretrain", type=str, default=None)
     parser.add_argument("--feat", type=int, default=32)
-    parser.add_argument("--rand_rot", type=bool, default=True)
+    parser.add_argument("--rand_rot", action='store_true')
+    parser.add_argument("--decay", action='store_true')
+    parser.add_argument("--data_dir", type=str, default="data")
 
     args = parser.parse_args()
 

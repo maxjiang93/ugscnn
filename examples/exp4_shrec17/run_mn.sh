@@ -1,1 +1,13 @@
-python train_modelnet.py --log_dir modelnet40_drop --model_path model.py --augmentation 1 --partition train --dataset modelnet40 --batch_size 64 --num_workers 12 --learning_rate 5e-3 --epochs 300 --feat 16 --rand_rot False
+python train_modelnet.py \
+--log_dir logs/modelnet40_drop_ft64_b16_ty \
+--model_path model.py \
+--partition train \
+--dataset modelnet40 \
+--batch_size 16 \
+--feat 64 \
+--num_workers 12 \
+--learning_rate 5e-3 \
+--epochs 300 \
+--sp_mesh_dir ../../mesh_files \
+--sp_mesh_level 5 \
+--data_dir data/archive_upward
