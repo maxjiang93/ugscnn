@@ -62,7 +62,7 @@ class ResNetDUCHDC(nn.Module):
     def __init__(self, num_classes, pretrained=True):
         super(ResNetDUCHDC, self).__init__()
         # resnet = models.resnet152()
-        resnet = models.resnet50(pretrained=pretrained)
+        resnet = models.resnet101(pretrained=pretrained)
         self.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
         self.layer1 = resnet.layer1
         self.layer2 = resnet.layer2
