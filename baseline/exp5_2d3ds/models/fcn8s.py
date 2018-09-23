@@ -3,6 +3,7 @@ sys.path.append("..")
 import torch
 from torch import nn
 from torchvision import models
+from .vgg import *
 
 from utils import get_upsampling_weight
 
@@ -10,7 +11,7 @@ from utils import get_upsampling_weight
 class FCN8s(nn.Module):
     def __init__(self, num_classes, pretrained=True):
         super(FCN8s, self).__init__()
-        vgg = models.vgg16(pretrained=pretrained)
+        vgg = vgg16(pretrained=pretrained)
         features, classifier = list(vgg.features.children()), list(vgg.classifier.children())
         '''
         100 padding for 2 reasons:
