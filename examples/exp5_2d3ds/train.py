@@ -12,7 +12,7 @@ from tabulate import tabulate
 
 from ops import MeshConv
 from loader import S2D3DSegLoader
-from model import UNet, UNet_intp
+from model import UNet
 
 import torch
 import torch.nn.functional as F
@@ -214,8 +214,10 @@ def main():
     train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, drop_last=True)
     val_loader = DataLoader(valset, batch_size=args.batch_size, shuffle=True, drop_last=False)
     
-    model = UNet_intp(mesh_folder=args.mesh_folder, in_ch=len(args.in_ch), out_ch=len(classes), 
-                      max_level=args.max_level, min_level=args.min_level, fdim=args.feat)
+    # model = UNet_intp(mesh_folder=args.mesh_folder, in_ch=len(args.in_ch), out_ch=len(classes), 
+    #                   max_level=args.max_level, min_level=args.min_level, fdim=args.feat)
+    model = UNet(mesh_folder=args.mesh_folder, in_ch=len(args.in_ch), out_ch=len(classes), 
+                 max_level=args.max_level, min_level=args.min_level, fdim=args.feat)
     model = nn.DataParallel(model)
     model.to(device)
 

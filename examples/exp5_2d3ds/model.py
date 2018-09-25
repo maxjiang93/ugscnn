@@ -1,5 +1,5 @@
 from torch import nn
-from ops import MeshConv, MeshConv_transpose, ResBlock, MeshIntp
+from ops import MeshConv, MeshConv_transpose, ResBlock
 import torch.nn.functional as F
 import os
 import torch

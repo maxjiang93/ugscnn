@@ -7,10 +7,8 @@ import pickle, gzip
 import os
 import shutil
 
-
-from ops import MeshConv
-from loader import S2D3DSegLoader
-from model import UNet
+from loader import SemSegLoader
+from models import ResNetDUCHDC, FCN8s, UNet
 
 import torch
 import torch.nn.functional as F
@@ -120,21 +118,30 @@ def test(args, model, test_loader, epoch, device):
 
 def export(args, model, test_loader):
     model.eval()
+    data_ = []
+    target_ = []
+    pred_ = []
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.cuda(), target.cuda()
             output = model(data)
             n_data = data.size()[0]
             pred = output.max(dim=1, keepdim=False)[1] # get the index of the max log-probability
-            break
+            data_.append(data.cpu().numpy())
+            target_.append(target.cpu().numpy())
+            pred_.append(pred.cpu().numpy())
+
+    data_ = np.concatenate(data_, 0)
+    target_ = np.concatenate(target_, 0)
+    pred_ = np.concatenate(pred_, 0)
     print("Saving export file...")
-    np.savez(args.export_file, data=data, labels=target, predict=pred)
+    np.savez(args.export_file, data=data_, labels=target_, predict=pred_)
     print("Success!")
     
 def main():
     # Training settings
-    parser = argparse.ArgumentParser(description='PyTorch Climate Segmentation Example')
-    parser.add_argument('--test-batch-size', type=int, default=64, metavar='N',
+    parser = argparse.ArgumentParser(description='PyTorch Segmentation Example')
+    parser.add_argument('--test-batch-size', type=int, default=16, metavar='N',
                         help='input batch size for testing (default: 64)')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
@@ -143,25 +150,27 @@ def main():
     parser.add_argument('--mesh_folder', type=str, default="../../mesh_files",
                         help='path to mesh folder (default: ../../mesh_files)')
     parser.add_argument('--ckpt', type=str, default="log/log_f32_cv1_l5_lw/checkpoint_latest.pth.tar_UNet_best.pth.tar")
-    parser.add_argument('--data_folder', type=str, default="data",
+    parser.add_argument('--data_folder', type=str, default="data_small",
                         help='path to data folder (default: processed_data)')
-    parser.add_argument('--max_level', type=int, default=5, help='max mesh level')
-    parser.add_argument('--min_level', type=int, default=0, help='min mesh level')
     parser.add_argument('--feat', type=int, default=32, help='filter dimensions')
     parser.add_argument('--export_file', type=str, default='samples.npz', help='file name for exporting samples')
     parser.add_argument('--in_ch', type=str, default="rgbd", choices=["rgb", "rgbd"], help="input channels")
     parser.add_argument('--fold', type=int, choices=[1, 2, 3], default=1, help="choice among 3 fold for cross-validation")
+    parser.add_argument('--model', type=str, choices=["ResNetDUCHDC", "FCN8s", "UNet"], required=True, help="model of choice")
 
 
     args = parser.parse_args()
+    print("%s", repr(args))
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
 
     torch.manual_seed(args.seed)
 
-    model = UNet(mesh_folder=args.mesh_folder, in_ch=len(args.in_ch), out_ch=len(classes), 
-        max_level=args.max_level, min_level=args.min_level, fdim=args.feat)
+    if args.model == "FCN8s":
+        model = FCN8s(len(classes), feat=args.feat, in_ch=len(args.in_ch))
+    elif args.model == "UNet":
+        model = UNet(len(classes), len(args.in_ch), feat=args.feat)
     model = nn.DataParallel(model)
     model.to(device)
 
@@ -189,11 +198,13 @@ def main():
     load_my_state_dict(model, resume_dict['state_dict'])  
     print("=> loaded checkpoint '{}' (epoch {} loss {:.03f}) "
           .format(args.ckpt, resume_dict['epoch'], best_miou))
-    testset = S2D3DSegLoader(args.data_folder, "test", fold=args.fold, sp_level=args.max_level, in_ch=len(args.in_ch))
-    test_loader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=True)
+    testset = SemSegLoader(args.data_folder, "test", fold=args.fold, in_ch=len(args.in_ch))
+    test_loader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False, drop_last=False)
 
     if args.export_file:
         export(args, model, test_loader)
+        with open(args.model+"_v1_files.txt", "w") as f:
+            f.writelines([l+"\n" for l in testset.rgb_list])
     else:
         test(args, model, test_loader, epoch, device)
         
