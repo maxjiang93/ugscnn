@@ -9,9 +9,9 @@ from utils import get_upsampling_weight
 
 # This is implemented in full accordance with the original one (https://github.com/shelhamer/fcn.berkeleyvision.org)
 class FCN8s(nn.Module):
-    def __init__(self, num_classes, pretrained=True):
+    def __init__(self, num_classes, pretrained=True, feat=64, **kwargs):
         super(FCN8s, self).__init__()
-        vgg = vgg16(pretrained=pretrained)
+        vgg = vgg16(pretrained=pretrained, feat=feat, **kwargs)
         features, classifier = list(vgg.features.children()), list(vgg.classifier.children())
         '''
         100 padding for 2 reasons:
@@ -21,6 +21,7 @@ class FCN8s(nn.Module):
         Spatial information of different layers' feature maps cannot be align exactly because of cropping, which is bad
         '''
         features[0].padding = (100, 100)
+        ft = feat
 
         for f in features:
             if 'MaxPool' in f.__class__.__name__:
@@ -32,20 +33,20 @@ class FCN8s(nn.Module):
         self.features4 = nn.Sequential(*features[17: 24])
         self.features5 = nn.Sequential(*features[24:])
 
-        self.score_pool3 = nn.Conv2d(256, num_classes, kernel_size=1)
-        self.score_pool4 = nn.Conv2d(512, num_classes, kernel_size=1)
+        self.score_pool3 = nn.Conv2d(ft*4, num_classes, kernel_size=1)
+        self.score_pool4 = nn.Conv2d(ft*8, num_classes, kernel_size=1)
         self.score_pool3.weight.data.zero_()
         self.score_pool3.bias.data.zero_()
         self.score_pool4.weight.data.zero_()
         self.score_pool4.bias.data.zero_()
 
-        fc6 = nn.Conv2d(512, 4096, kernel_size=7)
-        fc6.weight.data.copy_(classifier[0].weight.data.view(4096, 512, 7, 7))
+        fc6 = nn.Conv2d(ft*8, ft*64, kernel_size=7)
+        fc6.weight.data.copy_(classifier[0].weight.data.view(ft*64, ft*8, 7, 7))
         fc6.bias.data.copy_(classifier[0].bias.data)
-        fc7 = nn.Conv2d(4096, 4096, kernel_size=1)
-        fc7.weight.data.copy_(classifier[3].weight.data.view(4096, 4096, 1, 1))
+        fc7 = nn.Conv2d(ft*64, ft*64, kernel_size=1)
+        fc7.weight.data.copy_(classifier[3].weight.data.view(ft*64, ft*64, 1, 1))
         fc7.bias.data.copy_(classifier[3].bias.data)
-        score_fr = nn.Conv2d(4096, num_classes, kernel_size=1)
+        score_fr = nn.Conv2d(ft*64, num_classes, kernel_size=1)
         score_fr.weight.data.zero_()
         score_fr.bias.data.zero_()
         self.score_fr = nn.Sequential(

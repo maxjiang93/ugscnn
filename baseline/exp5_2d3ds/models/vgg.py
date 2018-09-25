@@ -23,17 +23,18 @@ model_urls = {
 
 class VGG(nn.Module):
 
-    def __init__(self, features, num_classes=1000, init_weights=True, in_ch=4):
+    def __init__(self, features, num_classes=1000, init_weights=True, in_ch=4, feat=64):
         super(VGG, self).__init__()
         self.features = features
+        ft = feat
         self.classifier = nn.Sequential(
-            nn.Linear(512 * 7 * 7, 4096),
+            nn.Linear(ft * 8 * 7 * 7, ft * 64),
             nn.ReLU(True),
             nn.Dropout(),
-            nn.Linear(4096, 4096),
+            nn.Linear(ft * 64, ft * 64),
             nn.ReLU(True),
             nn.Dropout(),
-            nn.Linear(4096, num_classes),
+            nn.Linear(ft * 64, num_classes),
         )
         if init_weights:
             self._initialize_weights()
@@ -138,7 +139,7 @@ def vgg13_bn(pretrained=False, **kwargs):
     return model
 
 
-def vgg16(pretrained=False, **kwargs):
+def vgg16(pretrained=False, feat=64, **kwargs):
     """VGG 16-layer model (configuration "D")
 
     Args:
@@ -146,7 +147,9 @@ def vgg16(pretrained=False, **kwargs):
     """
     if pretrained:
         kwargs['init_weights'] = False
-    model = VGG(make_layers(cfg['D']), **kwargs)
+    f = feat
+    cfg_ = [f, f, 'M', f*2, f*2, 'M', f*4, f*4, f*4, 'M', f*8, f*8, f*8, 'M', f*8, f*8, f*8, 'M']
+    model = VGG(make_layers(cfg_), feat=feat, **kwargs)
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['vgg16']))
     return model

@@ -170,6 +170,8 @@ def main():
     parser.add_argument('--train_stats_freq', default=5, type=int, help="frequency for printing training set stats. 0 for never.")
     parser.add_argument('--model', type=str, choices=["ResNetDUCHDC", "FCN8s", "UNet"], required=True, help="model of choice")
     parser.add_argument('--pretrained', action='store_true', help="whether to use pretrained model for ResNetDUCHDC and FCN8s")
+    parser.add_argument('--feat', type=int, help="number of feature layers")
+
 
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -204,11 +206,11 @@ def main():
 
     
     if args.model == "ResNetDUCHDC":
-        model = ResNetDUCHDC(len(classes), pretrained=args.pretrained)
+        model = ResNetDUCHDC(len(classes), pretrained=args.pretrained, in_ch=len(args.in_ch))
     elif args.model == "FCN8s":
-        model = FCN8s(len(classes), pretrained=args.pretrained)
+        model = FCN8s(len(classes), pretrained=args.pretrained,  feat=args.feat, in_ch=len(args.in_ch))
     elif args.model == "UNet":
-        model = UNet(len(classes), len(args.in_ch))
+        model = UNet(len(classes), len(args.in_ch), feat=args.feat)
 
     model = nn.DataParallel(model)
     model.to(device)
