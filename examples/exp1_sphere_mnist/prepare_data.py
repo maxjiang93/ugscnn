@@ -225,7 +225,7 @@ def main():
                         help="projection direction [NP/EQ] : North Pole / Equator",
                         type=str,
                         choices=["NP", "EQ"],
-                        default="NP")
+                        default="EQ")
     
     args = parser.parse_args()
 
