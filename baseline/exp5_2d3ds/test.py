@@ -168,7 +168,7 @@ def main():
     torch.manual_seed(args.seed)
 
     if args.model == "FCN8s":
-        model = FCN8s(len(classes), feat=args.feat, in_ch=len(args.in_ch))
+        model = FCN8s(len(classes), pretrained=False, feat=args.feat, in_ch=len(args.in_ch))
     elif args.model == "UNet":
         model = UNet(len(classes), len(args.in_ch), feat=args.feat)
     model = nn.DataParallel(model)

@@ -6,10 +6,10 @@ python train.py \
 --epochs 200 \
 --data_folder data_small \
 --fold 3 \
---log_dir log/log_fcn_vgg_f4_cv3_rgbd \
+--log_dir log/log_unet_f4_cv3_rgbd \
 --decay \
 --train_stats_freq 5 \
---model FCN8s \
+--model UNet \
 --in_ch rgbd \
 --lr 1e-3 \
 --feat 4
