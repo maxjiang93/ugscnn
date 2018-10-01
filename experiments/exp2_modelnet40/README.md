@@ -1,12 +1,12 @@
-# 3D Shape classification on ModelNet40
-## Dependencies
+## 3D Shape classification on ModelNet40
+### Dependencies
 The code below has the following dependencies that can be installed by conda and pip.
 ```bash
 conda install -c conda-forge rtree shapely  
 conda install -c conda-forge pyembree  
 pip install "trimesh[easy]"  
 ```
-
+### Instruction
 To run the experiment, execute the run script:
 ```bash
 chmod +x run.sh
