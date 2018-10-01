@@ -13,3 +13,5 @@ chmod +x run.sh
 ./run
 ```
 The script will automatically start downloading the data files if it does not already exist.
+
+We acknowledge code in this directory borrowed liberally from [S2CNN](https://github.com/jonas-koehler/s2cnn).
