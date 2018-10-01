@@ -11,7 +11,7 @@ precomp_mean = [0.4974898, 0.47918808, 0.42809588, 1.0961773]
 precomp_std = [0.23762763, 0.23354423, 0.23272438, 0.75536704]
 
 class S2D3DSegLoader(Dataset):
-    """Data loader for Climate Segmentation dataset."""
+    """Data loader for 2D3DS dataset."""
 
     def __init__(self, data_dir, partition, fold, sp_level, in_ch=4, normalize_mean=precomp_mean, normalize_std=precomp_std):
         """
@@ -19,6 +19,7 @@ class S2D3DSegLoader(Dataset):
             data_dir: path to data directory
             partition: train or test
             fold: 1, 2 or 3 (for 3-fold cross-validation)
+            sp_level: sphere mesh level. integer between 0 and 7.
             
         """
         assert(partition in ["train", "test"])
