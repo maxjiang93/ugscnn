@@ -1,4 +1,4 @@
-from mesh_utils import *
+from .mesh_utils import *
 import scipy.sparse as sparse
 import pyigl as igl
 import pickle
