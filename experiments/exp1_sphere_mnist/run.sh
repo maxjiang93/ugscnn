@@ -1,7 +1,7 @@
 #!/bin/bash
 source activate
-MESHFILES=../../archive/mesh_files
-DATAFILE=mnist_ico4_old.zip
+MESHFILES=../../mesh_files
+DATAFILE=mnist_ico4.zip
 
 # assert mesh files exist
 if [ ! -d $MESHFILES ]; then
