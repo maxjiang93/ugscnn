@@ -22,7 +22,7 @@ fi
 # create log directory
 mkdir -p logs
 
-source activate
+#source activate
 
 python train.py \
 --batch-size 16 \
