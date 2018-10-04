@@ -14,7 +14,7 @@ Our deep learning code base is written using [PyTorch](https://pytorch.org/) in 
 ### Instructions
 To acquire the mesh files used in this project, run the provided script `gen_mesh.py`. 
 ```bash
-python gen_mesh
+python gen_mesh.py
 ```
 To locally generate the mesh files, the [Libigl](http://libigl.github.io/libigl/) library is required. Libigl is mainly used for computing the Laplacian and Derivative matrices that are stored in the pickle files. Alternatively the script will download precomputed pickles if the library is not available.
 
