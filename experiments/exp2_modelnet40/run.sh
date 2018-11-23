@@ -31,12 +31,12 @@ fi
 
 # train
 python train.py \
---log_dir logs/modelnet40_drop_ft64_b16_ty \
+--log_dir logs/modelnet40_drop_ft16_b16_ty \
 --model_path model.py \
 --partition train \
 --dataset modelnet40 \
 --batch_size 16 \
---feat 64 \
+--feat 16 \
 --num_workers 12 \
 --learning_rate 5e-3 \
 --epochs 300 \

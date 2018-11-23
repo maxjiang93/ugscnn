@@ -1,137 +1,139 @@
-# pylint: disable=E1101,R,C
-import os
-import numpy as np
-import shutil
-import requests
-import zipfile
-from dataset import Shrec17, CacheNPY, ToMesh, ProjectOnSphere
-from subprocess import check_output
+# pylint: disable=E1101,R,C,W1202
 import torch
-from torch import nn
+import torch.nn.functional as F
 import torchvision
+from torch import nn
+
+import os
+import shutil
+import time
+import logging
+import copy
 import types
 import importlib.machinery
+from collections import OrderedDict
+from time import time
+import numpy as np
+
+from dataset import ModelNet, CacheNPY, ToMesh, ProjectOnSphere
 
 
-class KeepName:
-    def __init__(self, transform):
-        self.transform = transform
+def main(sp_mesh_dir, sp_mesh_level, log_dir, data_dir, eval_time,
+         dataset, partition, batch_size, jobs, ty, feat, no_cuda, neval):
+    torch.set_num_threads(jobs)
+    print("Running on {} CPU(s)".format(torch.get_num_threads()))
+    if no_cuda:
+        device = torch.device("cpu")
+    else:
+        device = torch.device("cuda")
+        torch.backends.cudnn.benchmark = True
 
-    def __call__(self, file_name):
-        return file_name, self.transform(file_name)
-
-
-def main(sp_mesh_dir, sp_mesh_level, log_dir, augmentation, dataset, batch_size, num_workers):
-    print(check_output(["nodejs", "--version"]).decode("utf-8"))
     sp_mesh_file = os.path.join(sp_mesh_dir, "icosphere_{}.pkl".format(sp_mesh_level))
 
-    torch.backends.cudnn.benchmark = True
 
-    # Increasing `repeat` will generate more cached files
-    transform = torchvision.transforms.Compose([
-        CacheNPY(prefix="sp5_", repeat=augmentation, pick_randomly=False, transform=torchvision.transforms.Compose(
-            [
-                ToMesh(random_rotations=False, random_translation=0),
-                ProjectOnSphere(meshfile=sp_mesh_file)
-            ]
-        )),
-        lambda xs: torch.stack([torch.FloatTensor(x) for x in xs])
-    ])
-    transform = KeepName(transform)
-
-    test_set = Shrec17("data", dataset, perturbed=False, download=True, transform=transform)
-
-    loader = importlib.machinery.SourceFileLoader('model', os.path.join(log_dir, "model.py"))
+    # Load the model
+    loader = importlib.machinery.SourceFileLoader('model',"model.py")
     mod = types.ModuleType(loader.name)
     loader.exec_module(mod)
 
-    model = mod.Model(55, mesh_folder=sp_mesh_dir)
-    model = nn.DataParallel(model)
-    model.cuda()
+    num_classes = int(dataset[-2:])
+    if not ty:
+        model = mod.Model(num_classes, mesh_folder=sp_mesh_dir, feat=feat)
+    else:
+        model = mod.Model_tiny(num_classes, mesh_folder=sp_mesh_dir, feat=feat)
 
-    pretrained_dict = torch.load(os.path.join(log_dir, "state.pkl"))
+    # load checkpoint
+    ckpt = os.path.join(log_dir, "state.pkl")
+    if no_cuda:
+        pretrained_dict = torch.load(ckpt, map_location=lambda storage, loc:storage)
+    else:
+        pretrained_dict = torch.load(ckpt)
 
-    def load_my_state_dict(self, state_dict):
+    def load_my_state_dict(self, state_dict, exclude='out_layer'):
         from torch.nn.parameter import Parameter
  
         own_state = self.state_dict()
         for name, param in state_dict.items():
             if name not in own_state:
-                 continue
+                continue
+            if exclude in name:
+                continue
             if isinstance(param, Parameter):
                 # backwards compatibility for serialized parameters
                 param = param.data
             own_state[name].copy_(param)
 
-    load_my_state_dict(model, pretrained_dict)    
+    load_my_state_dict(model, pretrained_dict)  
+    model.to(device)
+  
 
-    resdir = os.path.join(log_dir, dataset + "_normal")
-    if os.path.isdir(resdir):
-        shutil.rmtree(resdir)
-    os.mkdir(resdir)
+    print("{} paramerters in total".format(sum(x.numel() for x in model.parameters())))
+    print("{} paramerters in the last layer".format(sum(x.numel() for x in model.out_layer.parameters())))
 
-    predictions = []
-    ids = []
+    # Load the dataset
+    # Increasing `repeat` will generate more cached files
+    transform = CacheNPY(prefix="sp{}_".format(sp_mesh_level), transform=torchvision.transforms.Compose(
+        [
+            ToMesh(random_rotations=False, random_translation=0),
+            ProjectOnSphere(meshfile=sp_mesh_file, dataset=dataset, normalize=True)
+        ]
+    ), sp_mesh_dir=sp_mesh_dir, sp_mesh_level=sp_mesh_level)
 
-    loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True, drop_last=False)
+    transform_test = CacheNPY(prefix="sp{}_".format(sp_mesh_level), transform=torchvision.transforms.Compose(
+        [
+            ToMesh(random_rotations=False, random_translation=0),
+            ProjectOnSphere(meshfile=sp_mesh_file, dataset=dataset, normalize=True)
+        ]
+    ), sp_mesh_dir=sp_mesh_dir, sp_mesh_level=sp_mesh_level)
 
-    for batch_idx, data in enumerate(loader):
+    if dataset == 'modelnet10':
+        def target_transform(x):
+            classes = ['bathtub', 'bed', 'chair', 'desk', 'dresser', 'monitor', 'night_stand', 'sofa', 'table', 'toilet']
+            return classes.index(x)
+    elif dataset == 'modelnet40':
+        def target_transform(x):
+            classes = ['airplane', 'bowl', 'desk', 'keyboard', 'person', 'sofa', 'tv_stand', 'bathtub', 'car', 'door',
+                       'lamp', 'piano', 'stairs', 'vase', 'bed', 'chair', 'dresser', 'laptop', 'plant', 'stool',
+                       'wardrobe', 'bench', 'cone', 'flower_pot', 'mantel', 'radio', 'table', 'xbox', 'bookshelf', 'cup',
+                       'glass_box', 'monitor', 'range_hood', 'tent', 'bottle', 'curtain', 'guitar', 'night_stand', 'sink', 'toilet']
+            return classes.index(x)
+    else:
+        print('invalid dataset. must be modelnet10 or modelnet40')
+        assert(0)
+
+    test_set = ModelNet(data_dir, dataset=dataset, partition='test', transform=transform_test, target_transform=target_transform)
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=True, num_workers=jobs, pin_memory=True, drop_last=False)
+
+    def test_step(data, target):
         model.eval()
+        data, target = data.to(device), target.to(device)
 
-        if dataset != "test":
-            data = data[0]
+        t = time()
+        prediction = model(data)
+        dt = time() - t
+        loss = F.nll_loss(prediction, target)
 
-        file_names, data = data
-        batch_size, rep = data.size()[:2]
-        data = data.view(-1, *data.size()[2:])
+        correct = prediction.data.max(1)[1].eq(target.data).long().cpu().sum()
 
-        data = data.cuda()
-        with torch.no_grad():
-            pred = model(data).data
-        pred = pred.view(batch_size, rep, -1)
-        pred = pred.sum(1)
+        return loss.item(), correct.item(), dt
 
-        predictions.append(pred.cpu().numpy())
-        ids.extend([x.split("/")[-1].split(".")[0] for x in file_names])
+    # test
+    total_loss = 0
+    total_correct = 0
+    count = 0
+    total_time = []
+    for batch_idx, (data, target) in enumerate(test_loader):
+        loss, correct, dt = test_step(data, target)
+        total_time.append(dt)
+        total_loss += loss
+        total_correct += correct
+        count += 1
+        if eval_time and count >= neval:
+            print("Time per batch: {} secs".format(np.mean(total_time[10:])))
+            break
+    if not eval_time:
+        print("[Test] <LOSS>={:.2} <ACC>={:2}".format(total_loss / (count+1), total_correct / len(test_set)))
 
-        print("[{}/{}]      ".format(batch_idx, len(loader)))
-
-    predictions = np.concatenate(predictions)
-
-    predictions_class = np.argmax(predictions, axis=1)
-
-    for i in range(len(ids)):
-        if i % 100 == 0:
-            print("{}/{}    ".format(i, len(ids)), end="\r")
-        idfile = os.path.join(resdir, ids[i])
-
-        retrieved = [(predictions[j, predictions_class[j]], ids[j]) for j in range(len(ids)) if predictions_class[j] == predictions_class[i]]
-        retrieved = sorted(retrieved, reverse=True)
-        retrieved = [i for _, i in retrieved]
-
-        with open(idfile, "w") as f:
-            f.write("\n".join(retrieved))
-
-    # download evaluator if it does not exist
-    url = "https://shapenet.cs.stanford.edu/shrec17/code/evaluator.zip"
-    file_path = "evaluator.zip"
-
-    if not os.path.isdir("evaluator") and not os.path.exists(file_path):
-        r = requests.get(url, stream=True, verify=False)
-
-    if not os.path.isdir("evaluator"):
-        with open(file_path, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=16 * 1024 ** 2):
-                if chunk:  # filter out keep-alive new chunks
-                    f.write(chunk)
-                    f.flush()
-
-        zip_ref = zipfile.ZipFile(file_path, 'r')
-        zip_ref.extractall(".")
-        zip_ref.close()
-
-    print(check_output(["nodejs", "evaluate.js", os.path.join("..", log_dir) + "/"], cwd="evaluator").decode("utf-8"))
-    shutil.copy2(os.path.join("evaluator", log_dir.replace("/", "") + ".summary.csv"), os.path.join(log_dir, "summary.csv"))
 
 if __name__ == "__main__":
     import argparse
@@ -139,13 +141,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--log_dir", type=str, required=True)
-    parser.add_argument("--augmentation", type=int, default=1,
-                        help="Generate multiple image with random rotations and translations")
-    parser.add_argument("--dataset", choices={"test", "val", "train"}, default="val")
-    parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--num_workers", type=int, default=32)
+    parser.add_argument("--partition", choices={"test", "train"}, default="train")
+    parser.add_argument("--dataset", choices={"modelnet10", "modelnet40"}, default="modelnet40")
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--jobs", type=int, default=1)
     parser.add_argument("--sp_mesh_dir", type=str, default="../../mesh_files")
     parser.add_argument("--sp_mesh_level", type=int, default=5)
+    parser.add_argument("--feat", type=int, default=32)
+    parser.add_argument("--ty", action='store_true')
+    parser.add_argument("--data_dir", type=str, default="data")
+    parser.add_argument("--no_cuda", action='store_true')
+    parser.add_argument("--eval_time", action='store_true')
+    parser.add_argument('--neval', type=int, default=64, help='Number of evaluations to run for timing.')
 
     args = parser.parse_args()
 

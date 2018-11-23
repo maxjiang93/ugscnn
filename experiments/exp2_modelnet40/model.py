@@ -80,7 +80,7 @@ class Model(nn.Module):
         x = self.block1(x)
         x = self.block2(x)
         x = self.block3(x)
-        x = torch.squeeze(self.avg(x))
+        x = torch.squeeze(self.avg(x), dim=-1)
         x = F.dropout(x, training=self.training)
         x = self.out_layer(x)
 
@@ -107,7 +107,7 @@ class Model_tiny(nn.Module):
         x = self.block1(x)
         x = self.block2(x)
         x = self.block3(x)
-        x = torch.squeeze(self.avg(x))
+        x = torch.squeeze(self.avg(x), dim=-1)
         x = F.dropout(x, training=self.training)
         x = self.out_layer(x)
 
