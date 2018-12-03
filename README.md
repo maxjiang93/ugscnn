@@ -2,7 +2,7 @@
  
 By: [Chiyu "Max" Jiang](http://cfd.me.berkeley.edu/people/chiyu-max-jiang/), [Jingwei Huang](http://stanford.edu/~jingweih/), [Karthik Kashinath](http://www.nersc.gov/about/nersc-staff/data-analytics-services/karthik-kashinath/), [Prabhat](http://www.nersc.gov/about/nersc-staff/data-analytics-services/prabhat/), [Philip Marcus](http://www.me.berkeley.edu/people/faculty/philip-s-marcus), [Matthias Niessner](http://niessnerlab.org/)
 
-\[[Project Website](https://openreview.net/pdf?id=Bkl-43C9FQ)\] \[[Paper](https://openreview.net/pdf?id=Bkl-43C9FQ)\]
+\[[Project Website](http://www.maxjiang.ml/proj/ugscnn)\] \[[Paper](https://openreview.net/pdf?id=Bkl-43C9FQ)\]
  
 ![teaser](doc/ugscnn_teaser.png "UGSCNN_teaser")
 
