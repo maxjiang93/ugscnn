@@ -5,7 +5,7 @@ By: [Chiyu "Max" Jiang](http://cfd.me.berkeley.edu/people/chiyu-max-jiang/), [Ji
 ![teaser](doc/ugscnn_teaser.png "UGSCNN_teaser")
 
 ### Introduction
-This repository is based on our paper: UGSCNN: Spherical CNNs on Unstructured Grids. #TODO:LINK. The Project Webpage #TODO:LINK presents an overview of the project. 
+This repository is based on our paper: [UGSCNN: Spherical CNNs on Unstructured Grids](https://openreview.net/pdf?id=Bkl-43C9FQ). [The Project Webpage](http://www.maxjiang.ml/proj/ugscnn) presents an overview of the project. 
 
 In this project, we present an alternative convolution kernel for deploying CNNs on unstructured grids, using parameterized differential operators. More specifically we evaluate this method for the spherical domain that is discritized using the icosahedral spherical mesh. Our unique convolution kernel parameterization scheme achieves high parameter efficiency compared to competing methods. We evaluate our model for classification as well as semantic segmentation tasks. Please see `experiments/` for detailed examples.
 
