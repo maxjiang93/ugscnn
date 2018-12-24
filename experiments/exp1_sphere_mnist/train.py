@@ -81,7 +81,6 @@ def main():
                         help='log directory for run')
     parser.add_argument('--decay', action="store_true", help="switch to decay learning rate")
     parser.add_argument('--optim', type=str, default="adam", choices=["adam", "sgd"])
-    # parser.add_argument('--dropout', action="store_true")
     parser.add_argument('--feat', type=int, default=16, help="number of base features")
 
     args = parser.parse_args()

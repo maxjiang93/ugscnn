@@ -12,7 +12,7 @@ from tabulate import tabulate
 
 from ops import MeshConv
 from loader import S2D3DSegLoader
-from model import UNet
+from model import SphericalUNet
 
 import torch
 import torch.nn.functional as F
@@ -72,18 +72,6 @@ def accuracy(pred_cls, true_cls, nclass=15, drop=drop):
             tpos.append(true_positive)
             per_cls_counts.append(positive[i])
     return np.array(tpos), np.array(per_cls_counts)
-
-# def average_precision(score_cls, true_cls, nclass=15, drop=drop):
-#     true_cls_np = true_cls.cpu().numpy().reshape(-1)
-#     ch_keep_id = np.isin(true_cls_np, drop, invert=True)
-#     present_cls = np.setdiff1d(classes, drop)
-#     score = score_cls.cpu().numpy()
-#     score = np.swapaxes(score, 1, 2).reshape(-1, nclass)[ch_keep_id]
-#     score = score[:, present_cls]
-#     true = label_binarize(true_cls_np[ch_keep_id], classes=present_cls)
-#     ap = np.nan_to_num(average_precision_score(true, score, average=None))
-#     per_cls_counts = np.sum(true, axis=0)
-#     return ap, per_cls_counts
 
 def train(args, model, train_loader, optimizer, epoch, device, logger, keep_id=None):
     w = torch.tensor(label_weight).to(device)
@@ -214,9 +202,7 @@ def main():
     train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, drop_last=True)
     val_loader = DataLoader(valset, batch_size=args.batch_size, shuffle=True, drop_last=False)
     
-    # model = UNet_intp(mesh_folder=args.mesh_folder, in_ch=len(args.in_ch), out_ch=len(classes), 
-    #                   max_level=args.max_level, min_level=args.min_level, fdim=args.feat)
-    model = UNet(mesh_folder=args.mesh_folder, in_ch=len(args.in_ch), out_ch=len(classes), 
+    model = SphericalUNet(mesh_folder=args.mesh_folder, in_ch=len(args.in_ch), out_ch=len(classes), 
                  max_level=args.max_level, min_level=args.min_level, fdim=args.feat)
     model = nn.DataParallel(model)
     model.to(device)
@@ -284,7 +270,7 @@ def main():
         'state_dict': state_dict_no_sparse,
         'best_miou': best_miou,
         'optimizer': optimizer.state_dict(),
-        }, is_best, epoch, checkpoint_path, "_UNet", logger)
+        }, is_best, epoch, checkpoint_path, "_SUNet", logger)
 
 if __name__ == "__main__":
     main()

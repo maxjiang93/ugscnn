@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import sys; sys.path.append("../../meshcnn")
-from ops import MeshConv
+from ops import MeshConv, DownSamp, ResBlock
 import os
 
 class DownSamp(nn.Module):

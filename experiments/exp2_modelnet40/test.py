@@ -19,7 +19,7 @@ from dataset import ModelNet, CacheNPY, ToMesh, ProjectOnSphere
 
 
 def main(sp_mesh_dir, sp_mesh_level, log_dir, data_dir, eval_time,
-         dataset, partition, batch_size, jobs, ty, feat, no_cuda, neval):
+         dataset, partition, batch_size, jobs, tiny, feat, no_cuda, neval):
     torch.set_num_threads(jobs)
     print("Running on {} CPU(s)".format(torch.get_num_threads()))
     if no_cuda:
@@ -37,7 +37,7 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, data_dir, eval_time,
     loader.exec_module(mod)
 
     num_classes = int(dataset[-2:])
-    if not ty:
+    if not tiny:
         model = mod.Model(num_classes, mesh_folder=sp_mesh_dir, feat=feat)
     else:
         model = mod.Model_tiny(num_classes, mesh_folder=sp_mesh_dir, feat=feat)
@@ -148,7 +148,7 @@ if __name__ == "__main__":
     parser.add_argument("--sp_mesh_dir", type=str, default="../../mesh_files")
     parser.add_argument("--sp_mesh_level", type=int, default=5)
     parser.add_argument("--feat", type=int, default=32)
-    parser.add_argument("--ty", action='store_true')
+    parser.add_argument("--tiny", action='store_true')
     parser.add_argument("--data_dir", type=str, default="data")
     parser.add_argument("--no_cuda", action='store_true')
     parser.add_argument("--eval_time", action='store_true')

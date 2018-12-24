@@ -1,5 +1,5 @@
 #!/bin/bash
-source activate
+#source activate
 MESHFILES=../../mesh_files
 DATAFILE=mnist_ico4.zip
 
@@ -16,4 +16,4 @@ if [ ! -f $DATAFILE ]; then
 fi
 
 # train
-python train.py --mesh_folder $MESHFILES --datafile $DATAFILE --log_dir log_res_rot_adam_ft16_b64_decay --optim adam --lr 1e-2 --epochs 100 --feat 16 --decay --batch-size 64 #--dropout 
+python train.py --mesh_folder $MESHFILES --datafile $DATAFILE --log_dir log --optim adam --lr 1e-2 --epochs 100 --feat 16 --decay --batch-size 64

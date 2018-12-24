@@ -36,7 +36,7 @@ class Down(nn.Module):
         return x
 
 
-class UNet(nn.Module):
+class SphericalUNet(nn.Module):
     def __init__(self, mesh_folder, in_ch, out_ch, max_level=5, min_level=0, fdim=16):
         super().__init__()
         self.mesh_folder = mesh_folder

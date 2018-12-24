@@ -125,7 +125,10 @@ class ResBlock(nn.Module):
         self.diff_chan = (in_chan != out_chan)
 
         if coarsen:
-            self.seq1 = nn.Sequential(self.down, self.conv1, self.bn1, self.relu, 
+            # self.seq1 = nn.Sequential(self.down, self.conv1, self.bn1, self.relu, 
+            #                           self.conv2, self.bn2, self.relu, 
+            #                           self.conv3, self.bn3)
+            self.seq1 = nn.Sequential(self.conv1, self.down, self.bn1, self.relu, 
                                       self.conv2, self.bn2, self.relu, 
                                       self.conv3, self.bn3)
         else:

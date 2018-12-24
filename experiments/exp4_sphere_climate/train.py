@@ -11,7 +11,7 @@ from collections import OrderedDict
 
 from ops import MeshConv
 from loader import ClimateSegLoader
-from model import UNet
+from model import SphericalUNet
 
 import torch
 import torch.nn.functional as F
@@ -52,10 +52,22 @@ def average_precision(score_cls, true_cls, nclass=3):
     score = np.swapaxes(score, 1, 2).reshape(-1, nclass)
     return average_precision_score(true, score)
 
+def accuracy(pred_cls, true_cls, nclass=3):
+    """
+    compute per-node classification accuracy
+    """
+    accu = []
+    for i in range(nclass):
+        intersect = ((pred_cls == i) + (true_cls == i)).eq(2).sum().item()
+        thiscls = (true_cls == i).sum().item()
+        accu.append(intersect / thiscls)
+    return np.array(accu)
+
 def train(args, model, train_loader, optimizer, epoch, device, logger):
-    # w = torch.tensor([0.001020786726132422, 0.9528737404907279, 0.04610547278313972]).to(device)
-    # ratios: [0.97663559 0.00104578 0.02231863]
-    w = torch.tensor([1.0,1.0,1.0]).to(device)
+    if args.balance:
+        w = torch.tensor([0.00102182, 0.95426438, 0.04471379]).to(device)
+    else:
+        w = torch.tensor([1.0,1.0,1.0]).to(device)
     model.train()
     tot_loss = 0
     count = 0
@@ -76,11 +88,15 @@ def train(args, model, train_loader, optimizer, epoch, device, logger):
     return tot_loss
 
 def test(args, model, test_loader, device, logger):
-    # w = torch.tensor([0.001020786726132422, 0.9528737404907279, 0.04610547278313972]).to(device)
-    w = torch.tensor([1.0,1.0,1.0]).to(device)
+    # label frequencies: [0.001020786726132422, 0.9528737404907279, 0.04610547278313972]
+    if args.balance:
+        w = torch.tensor([0.00102182, 0.95426438, 0.04471379]).to(device)
+    else:
+        w = torch.tensor([1.0,1.0,1.0]).to(device)
     model.eval()
     test_loss = 0
     ious = np.zeros(3)
+    accus = np.zeros(3)
     aps = 0
     count = 0
     with torch.no_grad():
@@ -92,16 +108,19 @@ def test(args, model, test_loader, device, logger):
             pred = output.max(dim=1, keepdim=False)[1] # get the index of the max log-probability
             iou = iou_score(pred, target, nclass=3)
             ap = average_precision(output, target)
+            accu = accuracy(pred, target, nclass=3)
             ious += iou * n_data
             aps += ap * n_data
+            accus += accu * n_data
             count += n_data
     ious /= count
     aps /= count
+    accus /= count
     test_loss /= count
 
-    test_loss /= len(test_loader.dataset)
-    logger.info('Test set: Avg Precision: {:.4f}; MIoU: {:.4f}; IoU: {:.4f}, {:.4f}, {:.4f}; Avg loss: {:.4f}'.format(
-        aps, np.mean(ious), ious[0], ious[1], ious[2], test_loss))
+    # test_loss /= len(test_loader.dataset)
+    logger.info('Test set: Avg Precision: {:.4f}; MIoU: {:.4f}; Accu: {:.4f}, {:.4f}, {:.4f}; IoU: {:.4f}, {:.4f}, {:.4f}; Avg loss: {:.4f}'.format(
+        aps, np.mean(ious), accus[0], accus[1], accus[2], ious[0], ious[1], ious[2], test_loss))
     return aps
     
 def main():
@@ -133,6 +152,7 @@ def main():
     parser.add_argument('--decay', action="store_true", help="switch to decay learning rate")
     parser.add_argument('--optim', type=str, default="adam", choices=["adam", "sgd"])
     parser.add_argument('--resume', type=str, default=None, help="path to checkpoint if resume is needed")
+    parser.add_argument('--balance', action="store_true", help="switch for label frequency balancing")
 
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -162,9 +182,9 @@ def main():
     trainset = ClimateSegLoader(args.data_folder, "train")
     valset = ClimateSegLoader(args.data_folder, "val")
     train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, drop_last=True)
-    val_loader = DataLoader(valset, batch_size=args.batch_size, shuffle=True, drop_last=False)
+    val_loader = DataLoader(valset, batch_size=args.test_batch_size, shuffle=True, drop_last=False)
     
-    model = UNet(mesh_folder=args.mesh_folder, in_ch=16, out_ch=3, 
+    model = SphericalUNet(mesh_folder=args.mesh_folder, in_ch=16, out_ch=3, 
         max_level=args.max_level, min_level=args.min_level, fdim=args.feat)
     model = nn.DataParallel(model)
     model.to(device)
@@ -172,7 +192,7 @@ def main():
     if args.resume:
         resume_dict = torch.load(args.resume)
 
-        def load_my_state_dict(self, state_dict, exclude='out_layer'):
+        def load_my_state_dict(self, state_dict, exclude='none'):
             from torch.nn.parameter import Parameter
      
             own_state = self.state_dict()

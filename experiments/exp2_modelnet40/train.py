@@ -16,7 +16,7 @@ from collections import OrderedDict
 from dataset import ModelNet, CacheNPY, ToMesh, ProjectOnSphere
 
 
-def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation, decay, data_dir,
+def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation, decay, data_dir, tiny,
          dataset, partition, batch_size, learning_rate, num_workers, epochs, pretrain, feat, rand_rot):
     arguments = copy.deepcopy(locals())
 
@@ -45,8 +45,10 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation, decay, d
     loader.exec_module(mod)
 
     num_classes = int(dataset[-2:])
-    # model = mod.Model(num_classes, mesh_folder=sp_mesh_dir, feat=feat)
-    model = mod.Model_tiny(num_classes, mesh_folder=sp_mesh_dir, feat=feat)
+    if tiny:
+        model = mod.Model_tiny(num_classes, mesh_folder=sp_mesh_dir, feat=feat)
+    else:
+        model = mod.Model(num_classes, mesh_folder=sp_mesh_dir, feat=feat)
     model = nn.DataParallel(model)
     model.cuda()
 
@@ -108,7 +110,6 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation, decay, d
     test_set = ModelNet(data_dir, dataset=dataset, partition='test', transform=transform_test, target_transform=target_transform)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=False)
 
-    # optimizer = torch.optim.SGD(model.parameters(), lr=0, momentum=0.9)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     if decay:
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.7)
@@ -150,11 +151,6 @@ def main(sp_mesh_dir, sp_mesh_level, log_dir, model_path, augmentation, decay, d
         return lrs[-1] * learning_rate
 
     for epoch in range(epochs):
-
-        # lr = get_learning_rate(epoch)
-        # logger.info("learning rate = {} and batch size = {}".format(lr, train_loader.batch_size))
-        # for p in optimizer.param_groups:
-        #     p['lr'] = lr
         if decay:
             scheduler.step()
         # training
@@ -217,6 +213,7 @@ if __name__ == "__main__":
     parser.add_argument("--rand_rot", action='store_true')
     parser.add_argument("--decay", action='store_true')
     parser.add_argument("--data_dir", type=str, default="data")
+    parser.add_argument("--tiny", action='store_true')
 
     args = parser.parse_args()
 

@@ -23,14 +23,15 @@ fi
 # create log directory
 mkdir -p logs
 
-#source activate
 python train.py \
 --batch-size 256 \
 --test-batch-size 256 \
---epochs 100 \
+--epochs 50 \
 --data_folder data \
 --max_level 5 \
 --min_level 0 \
 --feat 8 \
---log_dir logs/log_f8 \
---decay
+--log_dir log_f8_balance \
+--decay \
+--lr 1e-2 \
+--balance

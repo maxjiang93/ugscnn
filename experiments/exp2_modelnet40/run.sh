@@ -31,7 +31,7 @@ fi
 
 # train
 python train.py \
---log_dir logs/modelnet40_drop_ft16_b16_ty \
+--log_dir logs/modelnet40_ft16_b16 \
 --model_path model.py \
 --partition train \
 --dataset modelnet40 \
