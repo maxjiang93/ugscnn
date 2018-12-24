@@ -13,11 +13,23 @@ In this project, we present an alternative convolution kernel for deploying CNNs
 
 Our deep learning code base is written using [PyTorch](https://pytorch.org/) in Python 3, in conjunction with standard ML packages such as [Scikit-Learn](http://scikit-learn.org/stable/) and [Numpy](http://www.numpy.org/).
 
-### Instructions
+### Generate or download mesh files
 To acquire the mesh files used in this project, run the provided script `gen_mesh.py`. 
 ```bash
 python gen_mesh.py
 ```
 To locally generate the mesh files, the [Libigl](http://libigl.github.io/libigl/) library is required. Libigl is mainly used for computing the Laplacian and Derivative matrices that are stored in the pickle files. Alternatively the script will download precomputed pickles if the library is not available.
 
-To run experiments, please find details instructions in under individual experiments in [`experiments`](experiments). For most experiments, simply running the script `run.sh` is sufficient to start the training process.
+### Run experiments
+To run experiments, please find details instructions in under individual experiments in [`experiments`](experiments). For most experiments, simply running the script `run.sh` is sufficient to start the training process:
+```bash
+chmod +x run.sh
+./run.sh
+```
+The script will automatically download data files if needed.
+
+### Credits
+We used code from open-source repositories, including [S2CNN](https://github.com/jonas-koehler/s2cnn), [Libigl](http://libigl.github.io/libigl/), among others.
+
+### Contact
+Please contact [Max Jiang](mailto:maxjiang93@gmail.com) if you have further questions!
