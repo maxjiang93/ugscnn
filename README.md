@@ -28,6 +28,19 @@ chmod +x run.sh
 ```
 The script will automatically download data files if needed.
 
+### Citation
+If you find our code useful for your work, please consider citing our paper:
+```
+@inproceedings{
+jiang2018spherical,
+title={Spherical {CNN}s on Unstructured Grids},
+author={Chiyu Max Jiang and Jingwei Huang and Karthik Kashinath and Prabhat and Philip Marcus and Matthias Niessner},
+booktitle={International Conference on Learning Representations},
+year={2019},
+url={https://openreview.net/forum?id=Bkl-43C9FQ},
+}
+```
+
 ### Credits
 We used code from open-source repositories, including [S2CNN](https://github.com/jonas-koehler/s2cnn), [Libigl](http://libigl.github.io/libigl/), among others.
 
