@@ -68,8 +68,8 @@ def iou_score(pred_cls, true_cls, nclass=15, drop=drop):
     union_ = []
     for i in range(nclass):
         if i not in drop:
-            intersect = ((pred_cls == i) + (true_cls == i)).eq(2).sum().item()
-            union = ((pred_cls == i) + (true_cls == i)).ge(1).sum().item()
+            intersect = ((pred_cls == i).int() + (true_cls == i).int()).eq(2).sum().item()
+            union = ((pred_cls == i).int() + (true_cls == i).int()).ge(1).sum().item()
             intersect_.append(intersect)
             union_.append(union)
     return np.array(intersect_), np.array(union_)
