@@ -1,6 +1,3 @@
-> **Note**
-> Our data server based in Berkeley experienced disk corruption and we have unfortunately not been able to recover the data files at this time or secure a replica of the data. Deep apologies for the inconvenience. If you have downloaded data from this repo before please kindly contact me at <maxjiang93@gmail.com> and share a copy of the data so that we can continue maintaining this repo.
-
 ## UGSCNN: Spherical CNNs on Unstructured Grids
  
 By: [Chiyu "Max" Jiang](http://maxjiang.ml/), [Jingwei Huang](http://stanford.edu/~jingweih/), [Karthik Kashinath](http://www.nersc.gov/about/nersc-staff/data-analytics-services/karthik-kashinath/), [Prabhat](http://www.nersc.gov/about/nersc-staff/data-analytics-services/prabhat/), [Philip Marcus](http://www.me.berkeley.edu/people/faculty/philip-s-marcus), [Matthias Niessner](http://niessnerlab.org/)
