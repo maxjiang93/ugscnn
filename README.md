@@ -47,5 +47,7 @@ url={https://openreview.net/forum?id=Bkl-43C9FQ},
 ### Credits
 We used code from open-source repositories, including [S2CNN](https://github.com/jonas-koehler/s2cnn), [Libigl](http://libigl.github.io/libigl/), among others.
 
+We thank Zhewen Xu from Jilin University for help in recovering the climate sphere data files (`climate_sphere_l5.zip`), and for providing a download port for scholars in mainland China via the Baidu drive [link](https://pan.baidu.com/s/11RV69AtewamTFH61gvD_8g?pwd=uq8s) (code：uq8s).
+
 ### Contact
 Please contact [Max Jiang](mailto:maxjiang93@gmail.com) if you have further questions!
