@@ -1,6 +1,9 @@
 import sys
 import os
 
+import gdown
+
+
 def main():
     try:
         sys.path.append("meshcnn")
@@ -13,13 +16,12 @@ def main():
         if not os.path.exists(dest):
             os.makedirs(dest)
         fname = 'icosphere_{}.pkl'
-        for i in range(8):
-            url = 'http://island.me.berkeley.edu/ugscnn/mesh_files/' + fname.format(i)
-            command = ["wget", "--no-check-certificate", "-P", dest, url]
-            try:
-                download_state = subprocess.call(command)
-            except Exception as e:
-                print(e)
+        url = 'https://drive.google.com/uc?id=17RermILq8jGu1Oz2LgX-k98FnfzAzOW2'
+        output = "mesh_files.zip"
+        try:
+            gdown.download(url, output, quiet=False)
+        except Exception as e:
+            print(e)
 
 if __name__ == '__main__':
     main()
