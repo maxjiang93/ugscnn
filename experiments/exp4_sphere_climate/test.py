@@ -66,10 +66,10 @@ def iou_score(pred_cls, true_cls, nclass=3):
     """
     iou = []
     for i in range(nclass):
-        # intersect = ((pred_cls == i) + (true_cls == i)).eq(2).item()
-        # union = ((pred_cls == i) + (true_cls == i)).ge(1).item()
-        intersect = ((pred_cls == i) + (true_cls == i)).eq(2).sum().item()
-        union = ((pred_cls == i) + (true_cls == i)).ge(1).sum().item()
+        # intersect = ((pred_cls == i).int() + (true_cls == i).int()).eq(2).item()
+        # union = ((pred_cls == i).int() + (true_cls == i).int()).ge(1).item()
+        intersect = ((pred_cls == i).int() + (true_cls == i).int()).eq(2).sum().item()
+        union = ((pred_cls == i).int() + (true_cls == i).int()).ge(1).sum().item()
         # print("Intersect: ", intersect, " Union: ", union)
         iou_ = intersect / union
         iou.append(iou_)
@@ -81,8 +81,8 @@ def accuracy(pred_cls, true_cls, nclass=3):
     """
     accu = []
     for i in range(nclass):
-        intersect = ((pred_cls == i) + (true_cls == i)).eq(2).sum().item()
-        thiscls = (true_cls == i).sum().item()
+        intersect = ((pred_cls == i).int() + (true_cls == i).int()).eq(2).sum().item()
+        thiscls = (true_cls == i).int().sum().item()
         accu.append(intersect / thiscls)
     return np.array(accu)
 
